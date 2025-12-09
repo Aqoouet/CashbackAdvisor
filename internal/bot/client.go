@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"time"
 
 	"github.com/rymax1e/open-cashback-advisor/internal/models"
@@ -101,10 +102,15 @@ func (c *APIClient) CreateCashback(req *models.CreateCashbackRequest) (*models.C
 
 // GetBestCashback получает лучший кэшбэк
 func (c *APIClient) GetBestCashback(groupName, category, monthYear string) (*models.CashbackRule, error) {
-	url := fmt.Sprintf("%s/api/v1/cashback/best?group_name=%s&category=%s&month_year=%s",
-		c.baseURL, groupName, category, monthYear)
+	// Правильное кодирование параметров URL
+	params := url.Values{}
+	params.Add("group_name", groupName)
+	params.Add("category", category)
+	params.Add("month_year", monthYear)
 	
-	resp, err := c.httpClient.Get(url)
+	requestURL := fmt.Sprintf("%s/api/v1/cashback/best?%s", c.baseURL, params.Encode())
+	
+	resp, err := c.httpClient.Get(requestURL)
 	if err != nil {
 		return nil, fmt.Errorf("ошибка запроса: %w", err)
 	}
@@ -133,10 +139,15 @@ func (c *APIClient) GetBestCashback(groupName, category, monthYear string) (*mod
 
 // ListCashback получает список правил пользователя
 func (c *APIClient) ListCashback(userID string, limit, offset int) (*models.ListCashbackResponse, error) {
-	url := fmt.Sprintf("%s/api/v1/cashback?user_id=%s&limit=%d&offset=%d",
-		c.baseURL, userID, limit, offset)
+	// Правильное кодирование параметров URL
+	params := url.Values{}
+	params.Add("user_id", userID)
+	params.Add("limit", fmt.Sprintf("%d", limit))
+	params.Add("offset", fmt.Sprintf("%d", offset))
 	
-	resp, err := c.httpClient.Get(url)
+	requestURL := fmt.Sprintf("%s/api/v1/cashback?%s", c.baseURL, params.Encode())
+	
+	resp, err := c.httpClient.Get(requestURL)
 	if err != nil {
 		return nil, fmt.Errorf("ошибка запроса: %w", err)
 	}
