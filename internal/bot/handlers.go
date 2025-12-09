@@ -315,10 +315,6 @@ func (b *Bot) handleBankCorrection(message *tgbotapi.Message, state *UserState) 
 		// Используем оригинальные данные без исправления
 		log.Printf("❌ Пользователь отклонил исправление банка")
 		
-		// Нужно восстановить оригинальное название - оно было в сообщении
-		// Парсим заново
-		data, _ := ParseMessage(message.From.UserName) // Это неправильно, нужно сохранить оригинал
-		
 		b.sendMessage(message.Chat.ID, "Хорошо, оставляю как есть.")
 		
 		// Продолжаем валидацию с оригинальным названием
