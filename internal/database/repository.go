@@ -260,3 +260,112 @@ func (r *Repository) fuzzySearch(ctx context.Context, field, value string, thres
 	return suggestions, nil
 }
 
+// --- Методы для работы с группами пользователей ---
+
+// SetUserGroup устанавливает группу пользователя
+func (r *Repository) SetUserGroup(ctx context.Context, userID, groupName string) error {
+	query := `
+		INSERT INTO user_groups (user_id, group_name, updated_at)
+		VALUES ($1, $2, CURRENT_TIMESTAMP)
+		ON CONFLICT (user_id) 
+		DO UPDATE SET group_name = $2, updated_at = CURRENT_TIMESTAMP
+	`
+	
+	_, err := r.db.Pool.Exec(ctx, query, userID, groupName)
+	if err != nil {
+		return fmt.Errorf("не удалось установить группу: %w", err)
+	}
+	
+	return nil
+}
+
+// GetUserGroup получает группу пользователя
+func (r *Repository) GetUserGroup(ctx context.Context, userID string) (string, error) {
+	query := `SELECT group_name FROM user_groups WHERE user_id = $1`
+	
+	var groupName string
+	err := r.db.Pool.QueryRow(ctx, query, userID).Scan(&groupName)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return "", fmt.Errorf("пользователь не в группе")
+		}
+		return "", fmt.Errorf("ошибка получения группы: %w", err)
+	}
+	
+	return groupName, nil
+}
+
+// CreateGroup создает новую группу
+func (r *Repository) CreateGroup(ctx context.Context, groupName, creatorID string) error {
+	query := `
+		INSERT INTO groups (group_name, created_by)
+		VALUES ($1, $2)
+		ON CONFLICT (group_name) DO NOTHING
+	`
+	
+	_, err := r.db.Pool.Exec(ctx, query, groupName, creatorID)
+	if err != nil {
+		return fmt.Errorf("не удалось создать группу: %w", err)
+	}
+	
+	// Добавляем создателя в группу
+	return r.SetUserGroup(ctx, creatorID, groupName)
+}
+
+// GroupExists проверяет существование группы
+func (r *Repository) GroupExists(ctx context.Context, groupName string) (bool, error) {
+	query := `SELECT EXISTS(SELECT 1 FROM groups WHERE group_name = $1)`
+	
+	var exists bool
+	err := r.db.Pool.QueryRow(ctx, query, groupName).Scan(&exists)
+	if err != nil {
+		return false, fmt.Errorf("ошибка проверки группы: %w", err)
+	}
+	
+	return exists, nil
+}
+
+// GetGroupMembers возвращает участников группы
+func (r *Repository) GetGroupMembers(ctx context.Context, groupName string) ([]string, error) {
+	query := `SELECT user_id FROM user_groups WHERE group_name = $1`
+	
+	rows, err := r.db.Pool.Query(ctx, query, groupName)
+	if err != nil {
+		return nil, fmt.Errorf("ошибка получения участников: %w", err)
+	}
+	defer rows.Close()
+	
+	var members []string
+	for rows.Next() {
+		var userID string
+		if err := rows.Scan(&userID); err != nil {
+			return nil, err
+		}
+		members = append(members, userID)
+	}
+	
+	return members, nil
+}
+
+// GetAllGroups возвращает список всех групп
+func (r *Repository) GetAllGroups(ctx context.Context) ([]string, error) {
+	query := `SELECT group_name FROM groups ORDER BY created_at DESC`
+	
+	rows, err := r.db.Pool.Query(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("ошибка получения групп: %w", err)
+	}
+	defer rows.Close()
+	
+	var groups []string
+	for rows.Next() {
+		var groupName string
+		if err := rows.Scan(&groupName); err != nil {
+			return nil, err
+		}
+		groups = append(groups, groupName)
+	}
+	
+	return groups, nil
+}
+

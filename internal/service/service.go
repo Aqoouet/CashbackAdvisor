@@ -203,3 +203,44 @@ func (s *Service) GetBestCashback(ctx context.Context, req *models.BestCashbackR
 	return s.repo.GetBestCashback(ctx, req.GroupName, req.Category, monthYear)
 }
 
+// --- Методы для работы с группами ---
+
+// CreateGroup создаёт новую группу
+func (s *Service) CreateGroup(ctx context.Context, groupName, creatorID string) error {
+	return s.repo.CreateGroup(ctx, groupName, creatorID)
+}
+
+// GetUserGroup получает группу пользователя
+func (s *Service) GetUserGroup(ctx context.Context, userID string) (string, error) {
+	return s.repo.GetUserGroup(ctx, userID)
+}
+
+// SetUserGroup устанавливает группу пользователя
+func (s *Service) SetUserGroup(ctx context.Context, userID, groupName string) error {
+	// Проверяем существование группы
+	exists, err := s.repo.GroupExists(ctx, groupName)
+	if err != nil {
+		return err
+	}
+	if !exists {
+		return fmt.Errorf("группа \"%s\" не существует", groupName)
+	}
+
+	return s.repo.SetUserGroup(ctx, userID, groupName)
+}
+
+// GroupExists проверяет существование группы
+func (s *Service) GroupExists(ctx context.Context, groupName string) (bool, error) {
+	return s.repo.GroupExists(ctx, groupName)
+}
+
+// GetAllGroups возвращает список всех групп
+func (s *Service) GetAllGroups(ctx context.Context) ([]string, error) {
+	return s.repo.GetAllGroups(ctx)
+}
+
+// GetGroupMembers возвращает участников группы
+func (s *Service) GetGroupMembers(ctx context.Context, groupName string) ([]string, error) {
+	return s.repo.GetGroupMembers(ctx, groupName)
+}
+

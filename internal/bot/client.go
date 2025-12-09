@@ -317,3 +317,166 @@ func (c *APIClient) DeleteCashback(id int64) error {
 	return nil
 }
 
+// --- Методы для работы с группами ---
+
+// GetUserGroup получает группу пользователя
+func (c *APIClient) GetUserGroup(userID string) (string, error) {
+	url := fmt.Sprintf("%s/api/v1/users/%s/group", c.baseURL, userID)
+	
+	resp, err := c.httpClient.Get(url)
+	if err != nil {
+		return "", fmt.Errorf("ошибка запроса: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusNotFound {
+		return "", fmt.Errorf("пользователь не в группе")
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("ошибка API: статус %d", resp.StatusCode)
+	}
+
+	var result struct {
+		GroupName string `json:"group_name"`
+	}
+	
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return "", fmt.Errorf("ошибка декодирования: %w", err)
+	}
+
+	return result.GroupName, nil
+}
+
+// CreateGroup создаёт новую группу
+func (c *APIClient) CreateGroup(groupName, creatorID string) error {
+	url := fmt.Sprintf("%s/api/v1/groups", c.baseURL)
+	
+	reqData := map[string]string{
+		"group_name": groupName,
+		"creator_id": creatorID,
+	}
+	
+	body, err := json.Marshal(reqData)
+	if err != nil {
+		return fmt.Errorf("ошибка сериализации: %w", err)
+	}
+
+	resp, err := c.httpClient.Post(url, "application/json", bytes.NewBuffer(body))
+	if err != nil {
+		return fmt.Errorf("ошибка запроса: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK {
+		respBody, _ := io.ReadAll(resp.Body)
+		var errResp models.ErrorResponse
+		if err := json.Unmarshal(respBody, &errResp); err == nil {
+			return fmt.Errorf("%s", errResp.Error)
+		}
+		return fmt.Errorf("ошибка API: статус %d", resp.StatusCode)
+	}
+
+	return nil
+}
+
+// JoinGroup присоединяет пользователя к группе
+func (c *APIClient) JoinGroup(userID, groupName string) error {
+	url := fmt.Sprintf("%s/api/v1/users/%s/group", c.baseURL, userID)
+	
+	reqData := map[string]string{
+		"group_name": groupName,
+	}
+	
+	body, err := json.Marshal(reqData)
+	if err != nil {
+		return fmt.Errorf("ошибка сериализации: %w", err)
+	}
+
+	req, err := http.NewRequest(http.MethodPut, url, bytes.NewBuffer(body))
+	if err != nil {
+		return fmt.Errorf("ошибка создания запроса: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("ошибка запроса: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		respBody, _ := io.ReadAll(resp.Body)
+		var errResp models.ErrorResponse
+		if err := json.Unmarshal(respBody, &errResp); err == nil {
+			return fmt.Errorf("%s", errResp.Error)
+		}
+		return fmt.Errorf("ошибка API: статус %d", resp.StatusCode)
+	}
+
+	return nil
+}
+
+// GroupExists проверяет существование группы
+func (c *APIClient) GroupExists(groupName string) bool {
+	url := fmt.Sprintf("%s/api/v1/groups/%s", c.baseURL, groupName)
+	
+	resp, err := c.httpClient.Get(url)
+	if err != nil {
+		return false
+	}
+	defer resp.Body.Close()
+
+	return resp.StatusCode == http.StatusOK
+}
+
+// GetAllGroups возвращает список всех групп
+func (c *APIClient) GetAllGroups() ([]string, error) {
+	url := fmt.Sprintf("%s/api/v1/groups", c.baseURL)
+	
+	resp, err := c.httpClient.Get(url)
+	if err != nil {
+		return nil, fmt.Errorf("ошибка запроса: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("ошибка API: статус %d", resp.StatusCode)
+	}
+
+	var result struct {
+		Groups []string `json:"groups"`
+	}
+	
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("ошибка декодирования: %w", err)
+	}
+
+	return result.Groups, nil
+}
+
+// GetGroupMembers возвращает участников группы
+func (c *APIClient) GetGroupMembers(groupName string) ([]string, error) {
+	url := fmt.Sprintf("%s/api/v1/groups/%s/members", c.baseURL, groupName)
+	
+	resp, err := c.httpClient.Get(url)
+	if err != nil {
+		return nil, fmt.Errorf("ошибка запроса: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("ошибка API: статус %d", resp.StatusCode)
+	}
+
+	var result struct {
+		Members []string `json:"members"`
+	}
+	
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("ошибка декодирования: %w", err)
+	}
+
+	return result.Members, nil
+}
+

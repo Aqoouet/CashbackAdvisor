@@ -16,7 +16,6 @@ type Bot struct {
 	api        *tgbotapi.BotAPI
 	client     *APIClient
 	userStates map[int64]*UserState
-	groups     *GroupsStore
 }
 
 // UserState хранит состояние пользователя
@@ -37,14 +36,10 @@ func NewBot(token string, apiClient *APIClient, debug bool) (*Bot, error) {
 	api.Debug = debug
 	log.Printf("✅ Авторизован как @%s", api.Self.UserName)
 
-	// Инициализируем хранилище групп
-	groupsStore := NewGroupsStore("groups.json")
-
 	return &Bot{
 		api:        api,
 		client:     apiClient,
 		userStates: make(map[int64]*UserState),
-		groups:     groupsStore,
 	}, nil
 }
 
@@ -105,7 +100,8 @@ func (b *Bot) handleMessage(message *tgbotapi.Message) {
 
 	// Проверяем, состоит ли пользователь в группе (кроме команд для групп)
 	userIDStr := strconv.FormatInt(message.From.ID, 10)
-	if _, inGroup := b.groups.GetUserGroup(userIDStr); !inGroup {
+	_, err := b.client.GetUserGroup(userIDStr)
+	if err != nil {
 		b.sendMessage(message.Chat.ID, 
 			"⚠️ Вы не состоите в группе!\n\n"+
 			"Сначала создайте группу или присоединитесь к существующей:\n"+
@@ -250,13 +246,20 @@ func (b *Bot) handleNewRule(message *tgbotapi.Message) {
 		return
 	}
 
+	// Получаем группу пользователя из API
+	userIDStr := strconv.FormatInt(message.From.ID, 10)
+	groupName, err := b.client.GetUserGroup(userIDStr)
+	if err != nil {
+		groupName = "" // Пользователь не в группе
+	}
+
 	// Показываем распознанные данные
 	b.sendMessage(message.Chat.ID, FormatParsedData(data))
 	b.sendMessage(message.Chat.ID, "🔍 Проверяю данные...")
 
 	// Вызываем /suggest для проверки
 	suggestReq := &models.SuggestRequest{
-		GroupName:       "Общие", // Можно сделать настраиваемым
+		GroupName:       groupName,
 		Category:        data.Category,
 		BankName:        data.BankName,
 		UserDisplayName: getUserDisplayName(message.From),
@@ -370,13 +373,20 @@ func (b *Bot) handleBankCorrection(message *tgbotapi.Message, state *UserState) 
 func (b *Bot) continueWithValidation(message *tgbotapi.Message, data *ParsedData) {
 	userID := message.From.ID
 	
+	// Получаем группу пользователя из API
+	userIDStr := strconv.FormatInt(message.From.ID, 10)
+	groupName, err := b.client.GetUserGroup(userIDStr)
+	if err != nil {
+		groupName = "" // Пользователь не в группе
+	}
+	
 	// Показываем распознанные данные
 	b.sendMessage(message.Chat.ID, FormatParsedData(data))
 	b.sendMessage(message.Chat.ID, "🔍 Проверяю данные...")
 
 	// Вызываем /suggest для проверки
 	suggestReq := &models.SuggestRequest{
-		GroupName:       "Общие",
+		GroupName:       groupName,
 		Category:        data.Category,
 		BankName:        data.BankName,
 		UserDisplayName: getUserDisplayName(message.From),
@@ -498,11 +508,18 @@ func (b *Bot) handleConfirmation(message *tgbotapi.Message, state *UserState) {
 
 // saveRule сохраняет кешбек через API
 func (b *Bot) saveRule(chatID int64, user *tgbotapi.User, data *ParsedData, force bool) {
+	// Получаем группу пользователя из API
+	userIDStr := strconv.FormatInt(user.ID, 10)
+	groupName, err := b.client.GetUserGroup(userIDStr)
+	if err != nil {
+		groupName = "" // Пользователь не в группе
+	}
+	
 	req := &models.CreateCashbackRequest{
-		GroupName:       "Общие",
+		GroupName:       groupName,
 		Category:        data.Category,
 		BankName:        data.BankName,
-		UserID:          strconv.FormatInt(user.ID, 10),
+		UserID:          userIDStr,
 		UserDisplayName: getUserDisplayName(user),
 		MonthYear:       data.MonthYear,
 		CashbackPercent: data.CashbackPercent,
@@ -647,17 +664,25 @@ func (b *Bot) handleBestQueryByCategory(message *tgbotapi.Message) {
 		return
 	}
 	
+	// Получаем группу пользователя из API
+	userIDStr := strconv.FormatInt(message.From.ID, 10)
+	groupName, err := b.client.GetUserGroup(userIDStr)
+	if err != nil {
+		b.sendMessage(message.Chat.ID, "❌ Вы должны быть в группе. Используйте /creategroup или /joingroup")
+		return
+	}
+	
 	// Используем текущий месяц по умолчанию
 	now := time.Now()
 	monthYear := fmt.Sprintf("%d-%02d", now.Year(), now.Month())
 	
-	b.sendMessage(message.Chat.ID, fmt.Sprintf("🔍 Ищу лучший кэшбэк для \"%s\" в этом месяце...", category))
+	b.sendMessage(message.Chat.ID, fmt.Sprintf("🔍 Ищу лучший кэшбэк для \"%s\" в группе \"%s\"...", category, groupName))
 	
 	// Вызываем API для поиска лучшего кэшбэка
-	rule, err := b.client.GetBestCashback("Общие", category, monthYear)
+	rule, err := b.client.GetBestCashback(groupName, category, monthYear)
 	if err != nil {
 		// Пытаемся найти похожие категории
-		categories, err2 := b.client.ListAllCategories("Общие", monthYear)
+		categories, err2 := b.client.ListAllCategories(groupName, monthYear)
 		if err2 == nil && len(categories) > 0 {
 			similar, distance := findSimilarCategory(category, categories)
 			simPercent := similarity(category, similar)
@@ -765,13 +790,13 @@ func (b *Bot) handleCreateGroup(message *tgbotapi.Message) {
 	userIDStr := strconv.FormatInt(message.From.ID, 10)
 
 	// Проверяем, не состоит ли пользователь уже в группе
-	if currentGroup, inGroup := b.groups.GetUserGroup(userIDStr); inGroup {
+	if currentGroup, err := b.client.GetUserGroup(userIDStr); err == nil {
 		b.sendMessage(message.Chat.ID, fmt.Sprintf("⚠️ Вы уже состоите в группе \"%s\"", currentGroup))
 		return
 	}
 
 	// Создаём группу
-	err := b.groups.CreateGroup(groupName, userIDStr)
+	err := b.client.CreateGroup(groupName, userIDStr)
 	if err != nil {
 		b.sendMessage(message.Chat.ID, fmt.Sprintf("❌ %s", err))
 		return
@@ -785,7 +810,11 @@ func (b *Bot) handleJoinGroup(message *tgbotapi.Message) {
 	args := strings.Fields(message.Text)
 	if len(args) < 2 {
 		// Показываем список доступных групп
-		groups := b.groups.GetAllGroups()
+		groups, err := b.client.GetAllGroups()
+		if err != nil {
+			b.sendMessage(message.Chat.ID, "❌ Ошибка получения списка групп")
+			return
+		}
 		if len(groups) == 0 {
 			b.sendMessage(message.Chat.ID, "📝 Пока нет групп.\n\nСоздайте первую группу: /creategroup Название")
 			return
@@ -804,19 +833,19 @@ func (b *Bot) handleJoinGroup(message *tgbotapi.Message) {
 	userIDStr := strconv.FormatInt(message.From.ID, 10)
 
 	// Проверяем, не состоит ли пользователь уже в группе
-	if currentGroup, inGroup := b.groups.GetUserGroup(userIDStr); inGroup {
+	if currentGroup, err := b.client.GetUserGroup(userIDStr); err == nil {
 		b.sendMessage(message.Chat.ID, fmt.Sprintf("⚠️ Вы уже состоите в группе \"%s\"", currentGroup))
 		return
 	}
 
 	// Проверяем существование группы
-	if !b.groups.GroupExists(groupName) {
+	if !b.client.GroupExists(groupName) {
 		b.sendMessage(message.Chat.ID, fmt.Sprintf("❌ Группа \"%s\" не существует.\n\nСоздайте её: /creategroup %s", groupName, groupName))
 		return
 	}
 
 	// Присоединяемся к группе
-	err := b.groups.SetUserGroup(userIDStr, groupName)
+	err := b.client.JoinGroup(userIDStr, groupName)
 	if err != nil {
 		b.sendMessage(message.Chat.ID, fmt.Sprintf("❌ Ошибка: %s", err))
 		return
@@ -833,22 +862,26 @@ func (b *Bot) handleGroupInfo(message *tgbotapi.Message) {
 	var groupName string
 	if len(args) < 2 {
 		// Показываем текущую группу пользователя
-		var inGroup bool
-		groupName, inGroup = b.groups.GetUserGroup(userIDStr)
-		if !inGroup {
+		var err error
+		groupName, err = b.client.GetUserGroup(userIDStr)
+		if err != nil {
 			b.sendMessage(message.Chat.ID, "❌ Вы не состоите в группе")
 			return
 		}
 	} else {
 		groupName = strings.Join(args[1:], " ")
-		if !b.groups.GroupExists(groupName) {
+		if !b.client.GroupExists(groupName) {
 			b.sendMessage(message.Chat.ID, fmt.Sprintf("❌ Группа \"%s\" не существует", groupName))
 			return
 		}
 	}
 
 	// Получаем участников группы
-	members := b.groups.GetGroupMembers(groupName)
+	members, err := b.client.GetGroupMembers(groupName)
+	if err != nil {
+		b.sendMessage(message.Chat.ID, "❌ Ошибка получения участников")
+		return
+	}
 	
 	text := fmt.Sprintf("📊 Группа: %s\n\n", groupName)
 	text += fmt.Sprintf("👥 Участников: %d\n\n", len(members))
@@ -892,7 +925,7 @@ func (b *Bot) handleGroupNameInput(message *tgbotapi.Message) {
 	groupName := strings.TrimSpace(message.Text)
 	userIDStr := strconv.FormatInt(message.From.ID, 10)
 
-	err := b.groups.CreateGroup(groupName, userIDStr)
+	err := b.client.CreateGroup(groupName, userIDStr)
 	if err != nil {
 		b.sendMessage(message.Chat.ID, fmt.Sprintf("❌ %s", err))
 		delete(b.userStates, message.From.ID)
@@ -996,9 +1029,17 @@ func (b *Bot) handleUpdateData(message *tgbotapi.Message, state *UserState) {
 		return
 	}
 
+	// Получаем группу пользователя из API
+	userIDStr := strconv.FormatInt(message.From.ID, 10)
+	groupName, err := b.client.GetUserGroup(userIDStr)
+	if err != nil {
+		b.sendMessage(message.Chat.ID, "❌ Вы должны быть в группе")
+		return
+	}
+	
 	// Обновляем кешбек через API
 	req := &models.UpdateCashbackRequest{
-		GroupName:       "Общие",
+		GroupName:       groupName,
 		Category:        data.Category,
 		BankName:        data.BankName,
 		MonthYear:       data.MonthYear,

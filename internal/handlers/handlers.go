@@ -210,6 +210,145 @@ func (h *Handler) RegisterRoutes(r chi.Router) {
 		r.Delete("/{id}", h.DeleteCashback)
 	})
 
+	// Группы
+	r.Route("/groups", func(r chi.Router) {
+		r.Post("/", h.CreateGroup)
+		r.Get("/", h.GetAllGroups)
+		r.Get("/{groupName}", h.GetGroup)
+		r.Get("/{groupName}/members", h.GetGroupMembers)
+	})
+
+	// Пользователи и группы
+	r.Route("/users/{userID}", func(r chi.Router) {
+		r.Get("/group", h.GetUserGroup)
+		r.Put("/group", h.SetUserGroup)
+	})
+
 	r.Get("/health", h.Health)
+}
+
+// --- Обработчики для групп ---
+
+// CreateGroup создаёт новую группу
+func (h *Handler) CreateGroup(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		GroupName string `json:"group_name"`
+		CreatorID string `json:"creator_id"`
+	}
+	
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondError(w, http.StatusBadRequest, "Неверный формат запроса", err.Error())
+		return
+	}
+
+	if req.GroupName == "" || req.CreatorID == "" {
+		respondError(w, http.StatusBadRequest, "Укажите group_name и creator_id")
+		return
+	}
+
+	err := h.service.CreateGroup(r.Context(), req.GroupName, req.CreatorID)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "Ошибка создания группы", err.Error())
+		return
+	}
+
+	respondJSON(w, http.StatusCreated, map[string]string{
+		"message":    "Группа создана",
+		"group_name": req.GroupName,
+	})
+}
+
+// GetAllGroups возвращает список всех групп
+func (h *Handler) GetAllGroups(w http.ResponseWriter, r *http.Request) {
+	groups, err := h.service.GetAllGroups(r.Context())
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "Ошибка получения групп", err.Error())
+		return
+	}
+
+	respondJSON(w, http.StatusOK, map[string]interface{}{
+		"groups": groups,
+	})
+}
+
+// GetGroup проверяет существование группы
+func (h *Handler) GetGroup(w http.ResponseWriter, r *http.Request) {
+	groupName := chi.URLParam(r, "groupName")
+	
+	exists, err := h.service.GroupExists(r.Context(), groupName)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "Ошибка проверки группы", err.Error())
+		return
+	}
+
+	if !exists {
+		respondError(w, http.StatusNotFound, "Группа не найдена")
+		return
+	}
+
+	respondJSON(w, http.StatusOK, map[string]interface{}{
+		"group_name": groupName,
+		"exists":     true,
+	})
+}
+
+// GetGroupMembers возвращает участников группы
+func (h *Handler) GetGroupMembers(w http.ResponseWriter, r *http.Request) {
+	groupName := chi.URLParam(r, "groupName")
+	
+	members, err := h.service.GetGroupMembers(r.Context(), groupName)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "Ошибка получения участников", err.Error())
+		return
+	}
+
+	respondJSON(w, http.StatusOK, map[string]interface{}{
+		"members": members,
+	})
+}
+
+// GetUserGroup получает группу пользователя
+func (h *Handler) GetUserGroup(w http.ResponseWriter, r *http.Request) {
+	userID := chi.URLParam(r, "userID")
+	
+	groupName, err := h.service.GetUserGroup(r.Context(), userID)
+	if err != nil {
+		respondError(w, http.StatusNotFound, "Пользователь не в группе")
+		return
+	}
+
+	respondJSON(w, http.StatusOK, map[string]string{
+		"group_name": groupName,
+	})
+}
+
+// SetUserGroup устанавливает группу пользователя
+func (h *Handler) SetUserGroup(w http.ResponseWriter, r *http.Request) {
+	userID := chi.URLParam(r, "userID")
+	
+	var req struct {
+		GroupName string `json:"group_name"`
+	}
+	
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondError(w, http.StatusBadRequest, "Неверный формат запроса", err.Error())
+		return
+	}
+
+	if req.GroupName == "" {
+		respondError(w, http.StatusBadRequest, "Укажите group_name")
+		return
+	}
+
+	err := h.service.SetUserGroup(r.Context(), userID, req.GroupName)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "Ошибка установки группы", err.Error())
+		return
+	}
+
+	respondJSON(w, http.StatusOK, map[string]string{
+		"message":    "Группа установлена",
+		"group_name": req.GroupName,
+	})
 }
 
