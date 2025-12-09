@@ -111,36 +111,29 @@ func (s *Service) GetCashback(ctx context.Context, id int64) (*models.CashbackRu
 func (s *Service) UpdateCashback(ctx context.Context, id int64, req *models.UpdateCashbackRequest) error {
 	updates := make(map[string]interface{})
 
-	if req.GroupName != nil {
-		if err := validator.ValidateTextField("group_name", *req.GroupName, true); err != nil {
+	if req.GroupName != "" {
+		if err := validator.ValidateTextField("group_name", req.GroupName, true); err != nil {
 			return err
 		}
-		updates["group_name"] = *req.GroupName
+		updates["group_name"] = req.GroupName
 	}
 
-	if req.Category != nil {
-		if err := validator.ValidateTextField("category", *req.Category, true); err != nil {
+	if req.Category != "" {
+		if err := validator.ValidateTextField("category", req.Category, true); err != nil {
 			return err
 		}
-		updates["category"] = *req.Category
+		updates["category"] = req.Category
 	}
 
-	if req.BankName != nil {
-		if err := validator.ValidateTextField("bank_name", *req.BankName, true); err != nil {
+	if req.BankName != "" {
+		if err := validator.ValidateTextField("bank_name", req.BankName, true); err != nil {
 			return err
 		}
-		updates["bank_name"] = *req.BankName
+		updates["bank_name"] = req.BankName
 	}
 
-	if req.UserDisplayName != nil {
-		if err := validator.ValidateTextField("user_display_name", *req.UserDisplayName, true); err != nil {
-			return err
-		}
-		updates["user_display_name"] = *req.UserDisplayName
-	}
-
-	if req.MonthYear != nil {
-		monthYear, err := validator.ValidateMonthYear(*req.MonthYear)
+	if req.MonthYear != "" {
+		monthYear, err := validator.ValidateMonthYear(req.MonthYear)
 		if err != nil {
 			return err
 		}
