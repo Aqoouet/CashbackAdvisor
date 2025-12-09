@@ -140,18 +140,18 @@ func (s *Service) UpdateCashback(ctx context.Context, id int64, req *models.Upda
 		updates["month_year"] = monthYear
 	}
 
-	if req.CashbackPercent != nil {
-		if err := validator.ValidateCashbackPercent(*req.CashbackPercent); err != nil {
+	if req.CashbackPercent > 0 {
+		if err := validator.ValidateCashbackPercent(req.CashbackPercent); err != nil {
 			return err
 		}
-		updates["cashback_percent"] = validator.RoundToTwoDecimals(*req.CashbackPercent)
+		updates["cashback_percent"] = validator.RoundToTwoDecimals(req.CashbackPercent)
 	}
 
-	if req.MaxAmount != nil {
-		if err := validator.ValidateMaxAmount(*req.MaxAmount); err != nil {
+	if req.MaxAmount > 0 {
+		if err := validator.ValidateMaxAmount(req.MaxAmount); err != nil {
 			return err
 		}
-		updates["max_amount"] = validator.RoundToTwoDecimals(*req.MaxAmount)
+		updates["max_amount"] = validator.RoundToTwoDecimals(req.MaxAmount)
 	}
 
 	return s.repo.Update(ctx, id, updates)
