@@ -462,6 +462,26 @@ func (b *Bot) handleBestQueryByCategory(message *tgbotapi.Message) {
 	// Вызываем API для поиска лучшего кэшбэка
 	rule, err := b.client.GetBestCashback("Общие", category, monthYear)
 	if err != nil {
+		// Пытаемся найти похожие категории
+		categories, err2 := b.client.ListAllCategories("Общие", monthYear)
+		if err2 == nil && len(categories) > 0 {
+			similar, distance := findSimilarCategory(category, categories)
+			simPercent := similarity(category, similar)
+			
+			// Если нашли похожую категорию (похожесть > 60%)
+			if simPercent > 60.0 {
+				b.sendMessage(message.Chat.ID, fmt.Sprintf("❌ Категория не найдена\n\n"+
+					"📁 Вы написали: \"%s\"\n"+
+					"💡 Возможно, вы имели в виду: \"%s\"\n\n"+
+					"Попробуйте ещё раз с правильным названием!", 
+					category, similar))
+				log.Printf("🔍 Поиск похожей категории: '%s' → '%s' (расстояние: %d, похожесть: %.1f%%)",
+					category, similar, distance, simPercent)
+				return
+			}
+		}
+		
+		// Если не нашли похожих
 		b.sendMessage(message.Chat.ID, fmt.Sprintf("❌ Кэшбэк не найден\n\n"+
 			"📁 Категория: \"%s\"\n"+
 			"📅 Месяц: %s\n\n"+

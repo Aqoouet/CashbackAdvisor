@@ -137,6 +137,49 @@ func (c *APIClient) GetBestCashback(groupName, category, monthYear string) (*mod
 	return &result, nil
 }
 
+// ListAllCategories получает список всех уникальных категорий
+func (c *APIClient) ListAllCategories(groupName, monthYear string) ([]string, error) {
+	params := url.Values{}
+	params.Add("group_name", groupName)
+	params.Add("month_year", monthYear)
+	params.Add("limit", "1000") // Большой лимит для получения всех
+	
+	requestURL := fmt.Sprintf("%s/api/v1/cashback?%s", c.baseURL, params.Encode())
+	
+	resp, err := c.httpClient.Get(requestURL)
+	if err != nil {
+		return nil, fmt.Errorf("ошибка запроса: %w", err)
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("ошибка чтения ответа: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("ошибка API: статус %d", resp.StatusCode)
+	}
+
+	var result models.ListCashbackResponse
+	if err := json.Unmarshal(respBody, &result); err != nil {
+		return nil, fmt.Errorf("ошибка десериализации: %w", err)
+	}
+
+	// Собираем уникальные категории
+	categories := make(map[string]bool)
+	for _, rule := range result.Rules {
+		categories[rule.Category] = true
+	}
+	
+	var uniqueCategories []string
+	for cat := range categories {
+		uniqueCategories = append(uniqueCategories, cat)
+	}
+	
+	return uniqueCategories, nil
+}
+
 // ListCashback получает список правил пользователя
 func (c *APIClient) ListCashback(userID string, limit, offset int) (*models.ListCashbackResponse, error) {
 	// Правильное кодирование параметров URL
