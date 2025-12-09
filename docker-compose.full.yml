@@ -4,16 +4,18 @@ services:
   postgres:
     image: postgres:15-alpine
     container_name: cashback_postgres
+    env_file:
+      - .env
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: cashback_db
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
+      POSTGRES_DB: ${DB_NAME:-cashback_db}
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -25,15 +27,17 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: cashback_api
+    env_file:
+      - .env
     environment:
-      DB_HOST: postgres
-      DB_PORT: 5432
-      DB_USER: postgres
-      DB_PASSWORD: postgres
-      DB_NAME: cashback_db
-      DB_SSLMODE: disable
-      SERVER_HOST: 0.0.0.0
-      SERVER_PORT: 8080
+      DB_HOST: ${DB_HOST:-postgres}
+      DB_PORT: ${DB_PORT:-5432}
+      DB_USER: ${DB_USER:-postgres}
+      DB_PASSWORD: ${DB_PASSWORD:-postgres}
+      DB_NAME: ${DB_NAME:-cashback_db}
+      DB_SSLMODE: ${DB_SSLMODE:-disable}
+      SERVER_HOST: ${SERVER_HOST:-0.0.0.0}
+      SERVER_PORT: ${SERVER_PORT:-8080}
     ports:
       - "8080:8080"
     depends_on:
@@ -48,6 +52,8 @@ services:
       context: .
       dockerfile: Dockerfile.bot
     container_name: cashback_bot
+    env_file:
+      - .env
     environment:
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
       API_BASE_URL: http://api:8080
