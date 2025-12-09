@@ -18,8 +18,16 @@ DB_NAME=${DB_NAME:-cashback_db}
 
 echo "🔄 Применение миграций к базе данных $DB_NAME..."
 
-# Применение миграций
-PGPASSWORD=$DB_PASSWORD psql -h $DB_HOST -p $DB_PORT -U $DB_USER -d $DB_NAME -f migrations/001_initial_schema.sql
+# Применение миграций по порядку
+for migration in migrations/*.sql; do
+    # Пропускаем down-миграции
+    if [[ "$migration" == *"_down.sql" ]]; then
+        continue
+    fi
+    
+    echo "  Применение $migration..."
+    PGPASSWORD=$DB_PASSWORD psql -h $DB_HOST -p $DB_PORT -U $DB_USER -d $DB_NAME -f "$migration" 2>&1 | grep -v "already exists" || true
+done
 
 echo "✅ Миграции успешно применены!"
 
