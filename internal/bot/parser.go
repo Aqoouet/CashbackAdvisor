@@ -32,11 +32,12 @@ func ParseMessage(text string) (*ParsedData, error) {
 	return parseFreeText(text)
 }
 
-// parseCommaSeparated парсит данные в формате: "Банк, Категория, Процент, Сумма, Месяц"
+// parseCommaSeparated парсит данные в формате: "Банк, Категория, Процент, Сумма[, Месяц]"
+// Месяц опционален - если не указан, используется текущий
 func parseCommaSeparated(text string) (*ParsedData, error) {
 	parts := strings.Split(text, ",")
-	if len(parts) < 5 {
-		return nil, fmt.Errorf("неверный формат. Используйте: Банк, Категория, Процент, Сумма, Месяц")
+	if len(parts) < 4 {
+		return nil, fmt.Errorf("неверный формат. Используйте: Банк, Категория, Процент, Сумма[, Месяц]")
 	}
 	
 	data := &ParsedData{
@@ -70,12 +71,18 @@ func parseCommaSeparated(text string) (*ParsedData, error) {
 		return nil, fmt.Errorf("неверный формат суммы: %s", parts[3])
 	}
 	
-	// 5. Месяц
-	monthStr := strings.TrimSpace(parts[4])
-	if monthYear, err := parseMonth(monthStr); err == nil {
-		data.MonthYear = monthYear
+	// 5. Месяц (опционален)
+	if len(parts) >= 5 && strings.TrimSpace(parts[4]) != "" {
+		monthStr := strings.TrimSpace(parts[4])
+		if monthYear, err := parseMonth(monthStr); err == nil {
+			data.MonthYear = monthYear
+		} else {
+			return nil, fmt.Errorf("неверный формат месяца: %s", parts[4])
+		}
 	} else {
-		return nil, fmt.Errorf("неверный формат месяца: %s", parts[4])
+		// Используем текущий месяц по умолчанию
+		now := time.Now()
+		data.MonthYear = fmt.Sprintf("%d-%02d", now.Year(), now.Month())
 	}
 	
 	return data, nil
