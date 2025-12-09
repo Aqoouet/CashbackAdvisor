@@ -11,6 +11,11 @@ NC='\033[0m' # No Color
 echo -e "${BLUE}==================================================${NC}"
 echo -e "${BLUE}  Обновление CashbackAdvisor${NC}"
 echo -e "${BLUE}==================================================${NC}"
+echo ""
+echo -e "${YELLOW}💡 Использование:${NC}"
+echo -e "  ${GREEN}./update.sh${NC}           - обычное обновление (с кешем)"
+echo -e "  ${GREEN}./update.sh --no-cache${NC} - полная пересборка (без кеша)"
+echo ""
 
 # Проверка docker-compose
 if ! command -v docker &> /dev/null; then
@@ -24,8 +29,14 @@ git pull origin main
 echo -e "${BLUE}🛑 Остановка контейнеров...${NC}"
 docker-compose -f docker-compose.full.yml down
 
-echo -e "${BLUE}🔨 Пересборка образов без кеша...${NC}"
-docker-compose -f docker-compose.full.yml build --no-cache
+echo -e "${BLUE}🔨 Пересборка образов...${NC}"
+if [ "$1" == "--no-cache" ]; then
+    echo -e "${YELLOW}⚠️  Пересборка без кеша (это займёт больше времени)${NC}"
+    docker-compose -f docker-compose.full.yml build --no-cache
+else
+    echo -e "${GREEN}✅ Используется кеш для ускорения${NC}"
+    docker-compose -f docker-compose.full.yml build
+fi
 
 echo -e "${BLUE}🚀 Запуск контейнеров...${NC}"
 docker-compose -f docker-compose.full.yml up -d

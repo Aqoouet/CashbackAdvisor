@@ -215,24 +215,36 @@ func (b *Bot) handleNewRule(message *tgbotapi.Message) {
 	}
 
 	// Если есть предложения по исправлению
-	hasSuggestions := len(suggestion.Suggestions.BankName) > 0 ||
-		len(suggestion.Suggestions.Category) > 0 ||
-		len(suggestion.Suggestions.GroupName) > 0 ||
-		len(suggestion.Suggestions.UserDisplayName) > 0
+	// Фильтруем только те предложения, которые реально отличаются
+	var realSuggestions []string
+	hasRealSuggestions := false
+	
+	if len(suggestion.Suggestions.BankName) > 0 {
+		suggestedBank := suggestion.Suggestions.BankName[0].Value
+		// Сравниваем без учета регистра и пробелов
+		if !strings.EqualFold(strings.TrimSpace(suggestedBank), strings.TrimSpace(data.BankName)) {
+			realSuggestions = append(realSuggestions, fmt.Sprintf("🏦 Банк: %s → %s",
+				data.BankName, suggestedBank))
+			hasRealSuggestions = true
+		}
+	}
+	
+	if len(suggestion.Suggestions.Category) > 0 {
+		suggestedCategory := suggestion.Suggestions.Category[0].Value
+		// Сравниваем без учета регистра и пробелов
+		normalizedOriginal := strings.ToLower(strings.ReplaceAll(data.Category, " ", ""))
+		normalizedSuggested := strings.ToLower(strings.ReplaceAll(suggestedCategory, " ", ""))
+		if normalizedOriginal != normalizedSuggested {
+			realSuggestions = append(realSuggestions, fmt.Sprintf("📁 Категория: %s → %s",
+				data.Category, suggestedCategory))
+			hasRealSuggestions = true
+		}
+	}
 
-	if hasSuggestions {
+	if hasRealSuggestions {
 		text := "💡 Возможно, вы имели в виду:\n\n"
-		
-		if len(suggestion.Suggestions.BankName) > 0 {
-			text += fmt.Sprintf("🏦 Банк: %s (вы написали: %s)\n",
-				suggestion.Suggestions.BankName[0].Value, data.BankName)
-		}
-		if len(suggestion.Suggestions.Category) > 0 {
-			text += fmt.Sprintf("📁 Категория: %s (вы написали: %s)\n",
-				suggestion.Suggestions.Category[0].Value, data.Category)
-		}
-		
-		text += "\n❓ Исправить и сохранить?"
+		text += strings.Join(realSuggestions, "\n")
+		text += "\n\n❓ Исправить и сохранить?"
 		
 		// Сохраняем состояние для подтверждения
 		b.userStates[userID] = &UserState{
