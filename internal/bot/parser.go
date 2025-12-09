@@ -23,8 +23,6 @@ type ParsedData struct {
 // 1. Через запятую: "Банк, Категория, Процент, Сумма, Месяц"
 // 2. Свободный текст (старый формат)
 func ParseMessage(text string) (*ParsedData, error) {
-	data := &ParsedData{}
-	
 	// Проверяем, есть ли запятые - значит используется новый формат
 	if strings.Contains(text, ",") {
 		return parseCommaSeparated(text)
