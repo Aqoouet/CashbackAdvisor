@@ -200,28 +200,31 @@ func (h *Handler) Health(w http.ResponseWriter, r *http.Request) {
 
 // RegisterRoutes регистрирует все маршруты
 func (h *Handler) RegisterRoutes(r chi.Router) {
-	r.Route("/api/v1/cashback", func(r chi.Router) {
-		r.Post("/suggest", h.Suggest)
-		r.Post("/", h.CreateCashback)
-		r.Get("/", h.ListCashback)
-		r.Get("/best", h.GetBestCashback)
-		r.Get("/{id}", h.GetCashback)
-		r.Put("/{id}", h.UpdateCashback)
-		r.Delete("/{id}", h.DeleteCashback)
-	})
+	r.Route("/api/v1", func(r chi.Router) {
+		// Cashback
+		r.Route("/cashback", func(r chi.Router) {
+			r.Post("/suggest", h.Suggest)
+			r.Post("/", h.CreateCashback)
+			r.Get("/", h.ListCashback)
+			r.Get("/best", h.GetBestCashback)
+			r.Get("/{id}", h.GetCashback)
+			r.Put("/{id}", h.UpdateCashback)
+			r.Delete("/{id}", h.DeleteCashback)
+		})
 
-	// Группы
-	r.Route("/groups", func(r chi.Router) {
-		r.Post("/", h.CreateGroup)
-		r.Get("/", h.GetAllGroups)
-		r.Get("/check", h.GetGroup)      // ?name=groupName
-		r.Get("/members", h.GetGroupMembers) // ?name=groupName
-	})
+		// Группы
+		r.Route("/groups", func(r chi.Router) {
+			r.Post("/", h.CreateGroup)
+			r.Get("/", h.GetAllGroups)
+			r.Get("/check", h.GetGroup)      // ?name=groupName
+			r.Get("/members", h.GetGroupMembers) // ?name=groupName
+		})
 
-	// Пользователи и группы
-	r.Route("/users/{userID}", func(r chi.Router) {
-		r.Get("/group", h.GetUserGroup)
-		r.Put("/group", h.SetUserGroup)
+		// Пользователи и группы
+		r.Route("/users/{userID}", func(r chi.Router) {
+			r.Get("/group", h.GetUserGroup)
+			r.Put("/group", h.SetUserGroup)
+		})
 	})
 
 	r.Get("/health", h.Health)
