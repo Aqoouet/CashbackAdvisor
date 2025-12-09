@@ -914,7 +914,8 @@ func (b *Bot) handleGroupInfo(message *tgbotapi.Message) {
 		// Группируем по категориям
 		categories := make(map[string][]string)
 		for _, rule := range list.Rules {
-			if rule.GroupName == groupName && rule.MonthYear.Format("2006-01") == monthYear {
+			// ListCashback уже фильтрует по группе через JOIN, проверяем только месяц
+			if rule.MonthYear.Format("2006-01") == monthYear {
 				category := rule.Category
 				info := fmt.Sprintf("%.1f%% (%s, карта: %s)", rule.CashbackPercent, rule.BankName, rule.UserDisplayName)
 				categories[category] = append(categories[category], info)
