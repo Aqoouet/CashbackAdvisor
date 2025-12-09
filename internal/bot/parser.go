@@ -90,15 +90,41 @@ func ParseMessage(text string) (*ParsedData, error) {
 		}
 	}
 
-	// Если не нашли категорию, пробуем извлечь первое существительное
+	// Если не нашли категорию, пробуем извлечь из текста
 	if data.Category == "" {
 		words := strings.Fields(text)
+		var categoryWords []string
+		
 		for _, word := range words {
-			// Простая эвристика: берем слова длиннее 3 символов
-			if len(word) > 3 && !isNumber(word) {
-				data.Category = word
-				break
+			// Пропускаем банк, числа, процент, рубли, месяцы
+			wordLower := strings.ToLower(word)
+			if len(word) > 2 && !isNumber(word) && 
+			   !strings.EqualFold(word, data.BankName) &&
+			   !strings.Contains(wordLower, "%") &&
+			   !strings.Contains(wordLower, "руб") &&
+			   !strings.HasSuffix(wordLower, "р") &&
+			   !strings.Contains(wordLower, "январ") &&
+			   !strings.Contains(wordLower, "феврал") &&
+			   !strings.Contains(wordLower, "март") &&
+			   !strings.Contains(wordLower, "апрел") &&
+			   !strings.Contains(wordLower, "ма") &&
+			   !strings.Contains(wordLower, "июн") &&
+			   !strings.Contains(wordLower, "июл") &&
+			   !strings.Contains(wordLower, "август") &&
+			   !strings.Contains(wordLower, "сентябр") &&
+			   !strings.Contains(wordLower, "октябр") &&
+			   !strings.Contains(wordLower, "ноябр") &&
+			   !strings.Contains(wordLower, "декабр") {
+				categoryWords = append(categoryWords, word)
+				// Берем до 3 слов для категории
+				if len(categoryWords) >= 3 {
+					break
+				}
 			}
+		}
+		
+		if len(categoryWords) > 0 {
+			data.Category = strings.Join(categoryWords, " ")
 		}
 	}
 
