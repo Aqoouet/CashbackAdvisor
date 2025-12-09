@@ -569,8 +569,16 @@ func (b *Bot) saveRule(chatID int64, user *tgbotapi.User, data *ParsedData, forc
 
 // handleList обрабатывает команду /list
 func (b *Bot) handleList(message *tgbotapi.Message) {
+	// Получаем группу пользователя
+	userIDStr := strconv.FormatInt(message.From.ID, 10)
+	groupName, err := b.client.GetUserGroup(userIDStr)
+	if err != nil {
+		b.sendMessage(message.Chat.ID, "❌ Вы должны быть в группе. Используйте /creategroup или /joingroup")
+		return
+	}
+	
 	// Получаем список всех кешбеков группы
-	list, err := b.client.ListCashback("", 100, 0)
+	list, err := b.client.ListCashback(groupName, 100, 0)
 	if err != nil {
 		b.sendMessage(message.Chat.ID, fmt.Sprintf("❌ Ошибка: %s", err))
 		return

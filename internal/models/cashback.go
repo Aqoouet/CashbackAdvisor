@@ -84,9 +84,10 @@ type BestCashbackRequest struct {
 
 // ListCashbackRequest представляет запрос на получение списка правил
 type ListCashbackRequest struct {
-	Limit  int    `json:"limit"`
-	Offset int    `json:"offset"`
-	UserID string `json:"user_id,omitempty"`
+	Limit     int    `json:"limit"`
+	Offset    int    `json:"offset"`
+	UserID    string `json:"user_id,omitempty"`    // Legacy, deprecated
+	GroupName string `json:"group_name,omitempty"` // New way
 }
 
 // ListCashbackResponse представляет ответ со списком правил

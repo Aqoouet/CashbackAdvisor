@@ -172,7 +172,8 @@ func (s *Service) ListCashback(ctx context.Context, req *models.ListCashbackRequ
 		req.Offset = 0
 	}
 
-	rules, total, err := s.repo.List(ctx, req.Limit, req.Offset, req.UserID)
+	// Используем GroupName вместо UserID
+	rules, total, err := s.repo.List(ctx, req.Limit, req.Offset, req.GroupName)
 	if err != nil {
 		return nil, err
 	}

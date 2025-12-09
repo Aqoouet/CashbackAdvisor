@@ -120,37 +120,32 @@ func (r *Repository) Delete(ctx context.Context, id int64) error {
 }
 
 // List получает список правил с пагинацией
-func (r *Repository) List(ctx context.Context, limit, offset int, userID string) ([]models.CashbackRule, int, error) {
-	// Запрос на получение общего количества
-	countQuery := "SELECT COUNT(*) FROM cashback_rules"
-	countArgs := []interface{}{}
-	if userID != "" {
-		countQuery += " WHERE user_id = $1"
-		countArgs = append(countArgs, userID)
-	}
-
+func (r *Repository) List(ctx context.Context, limit, offset int, groupName string) ([]models.CashbackRule, int, error) {
+	// Запрос на получение общего количества через JOIN с user_groups
+	countQuery := `
+		SELECT COUNT(*) 
+		FROM cashback_rules cr
+		INNER JOIN user_groups ug ON cr.user_id = ug.user_id
+		WHERE ug.group_name = $1
+	`
+	
 	var total int
-	err := r.db.Pool.QueryRow(ctx, countQuery, countArgs...).Scan(&total)
+	err := r.db.Pool.QueryRow(ctx, countQuery, groupName).Scan(&total)
 	if err != nil {
 		return nil, 0, fmt.Errorf("не удалось получить количество записей: %w", err)
 	}
 
-	// Запрос на получение правил
+	// Запрос на получение правил через JOIN с user_groups
 	query := `
-		SELECT id, group_name, category, bank_name, user_id, user_display_name,
-			   month_year, cashback_percent, max_amount, created_at, updated_at
-		FROM cashback_rules
+		SELECT cr.id, cr.group_name, cr.category, cr.bank_name, cr.user_id, cr.user_display_name,
+			   cr.month_year, cr.cashback_percent, cr.max_amount, cr.created_at, cr.updated_at
+		FROM cashback_rules cr
+		INNER JOIN user_groups ug ON cr.user_id = ug.user_id
+		WHERE ug.group_name = $1
+		ORDER BY cr.created_at DESC 
+		LIMIT $2 OFFSET $3
 	`
-	args := []interface{}{}
-	if userID != "" {
-		query += " WHERE user_id = $1"
-		args = append(args, userID)
-		query += fmt.Sprintf(" ORDER BY created_at DESC LIMIT $2 OFFSET $3")
-		args = append(args, limit, offset)
-	} else {
-		query += fmt.Sprintf(" ORDER BY created_at DESC LIMIT $1 OFFSET $2")
-		args = append(args, limit, offset)
-	}
+	args := []interface{}{groupName, limit, offset}
 
 	rows, err := r.db.Pool.Query(ctx, query, args...)
 	if err != nil {
@@ -181,12 +176,14 @@ func (r *Repository) List(ctx context.Context, limit, offset int, userID string)
 
 // GetBestCashback получает правило с максимальным кэшбэком для заданных параметров
 func (r *Repository) GetBestCashback(ctx context.Context, groupName, category string, monthYear time.Time) (*models.CashbackRule, error) {
+	// Ищем лучший кешбэк среди всех пользователей группы через JOIN с user_groups
 	query := `
-		SELECT id, group_name, category, bank_name, user_id, user_display_name,
-			   month_year, cashback_percent, max_amount, created_at, updated_at
-		FROM cashback_rules
-		WHERE group_name = $1 AND category = $2 AND month_year = $3
-		ORDER BY cashback_percent DESC, max_amount DESC
+		SELECT cr.id, cr.group_name, cr.category, cr.bank_name, cr.user_id, cr.user_display_name,
+			   cr.month_year, cr.cashback_percent, cr.max_amount, cr.created_at, cr.updated_at
+		FROM cashback_rules cr
+		INNER JOIN user_groups ug ON cr.user_id = ug.user_id
+		WHERE ug.group_name = $1 AND cr.category = $2 AND cr.month_year = $3
+		ORDER BY cr.cashback_percent DESC, cr.max_amount DESC
 		LIMIT 1
 	`
 

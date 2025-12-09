@@ -180,11 +180,11 @@ func (c *APIClient) ListAllCategories(groupName, monthYear string) ([]string, er
 	return uniqueCategories, nil
 }
 
-// ListCashback получает список правил пользователя
-func (c *APIClient) ListCashback(userID string, limit, offset int) (*models.ListCashbackResponse, error) {
+// ListCashback получает список правил группы
+func (c *APIClient) ListCashback(groupName string, limit, offset int) (*models.ListCashbackResponse, error) {
 	// Правильное кодирование параметров URL
 	params := url.Values{}
-	params.Add("user_id", userID)
+	params.Add("group_name", groupName)
 	params.Add("limit", fmt.Sprintf("%d", limit))
 	params.Add("offset", fmt.Sprintf("%d", offset))
 	

@@ -133,7 +133,8 @@ func (h *Handler) DeleteCashback(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) ListCashback(w http.ResponseWriter, r *http.Request) {
 	limitStr := r.URL.Query().Get("limit")
 	offsetStr := r.URL.Query().Get("offset")
-	userID := r.URL.Query().Get("user_id")
+	userID := r.URL.Query().Get("user_id")       // Legacy
+	groupName := r.URL.Query().Get("group_name") // New way
 
 	limit := 20
 	offset := 0
@@ -151,9 +152,10 @@ func (h *Handler) ListCashback(w http.ResponseWriter, r *http.Request) {
 	}
 
 	req := &models.ListCashbackRequest{
-		Limit:  limit,
-		Offset: offset,
-		UserID: userID,
+		Limit:     limit,
+		Offset:    offset,
+		UserID:    userID,    // Legacy
+		GroupName: groupName, // New way
 	}
 
 	response, err := h.service.ListCashback(r.Context(), req)
