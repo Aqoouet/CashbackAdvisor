@@ -908,19 +908,35 @@ func (b *Bot) handleGroupInfo(message *tgbotapi.Message) {
 	now := time.Now()
 	monthYear := fmt.Sprintf("%d-%02d", now.Year(), now.Month())
 	
+	log.Printf("🔍 /groupinfo debug: groupName=%s, monthYear=%s", groupName, monthYear)
+	
 	// Получаем список всех кэшбэков группы
 	list, err := b.client.ListCashback(groupName, 1000, 0)
+	if err != nil {
+		log.Printf("❌ ListCashback error: %v", err)
+	} else {
+		log.Printf("✅ ListCashback returned %d rules", len(list.Rules))
+	}
+	
 	if err == nil && len(list.Rules) > 0 {
 		// Группируем по категориям
 		categories := make(map[string][]string)
+		matchCount := 0
 		for _, rule := range list.Rules {
+			ruleMonth := rule.MonthYear.Format("2006-01")
+			log.Printf("  📅 Rule ID=%d, category=%s, month=%s (checking against %s)", 
+				rule.ID, rule.Category, ruleMonth, monthYear)
+			
 			// ListCashback уже фильтрует по группе через JOIN, проверяем только месяц
-			if rule.MonthYear.Format("2006-01") == monthYear {
+			if ruleMonth == monthYear {
+				matchCount++
 				category := rule.Category
 				info := fmt.Sprintf("%.1f%% (%s, карта: %s)", rule.CashbackPercent, rule.BankName, rule.UserDisplayName)
 				categories[category] = append(categories[category], info)
 			}
 		}
+		
+		log.Printf("✅ Matched %d rules for month %s, categories: %d", matchCount, monthYear, len(categories))
 
 		if len(categories) > 0 {
 			text += "💰 Кэшбэк в текущем месяце:\n\n"
@@ -934,6 +950,8 @@ func (b *Bot) handleGroupInfo(message *tgbotapi.Message) {
 		} else {
 			text += "💡 Пока нет кэшбэков в текущем месяце"
 		}
+	} else {
+		log.Printf("⚠️ No rules to process (err=%v, len=%d)", err, len(list.Rules))
 	}
 
 	b.sendMessage(message.Chat.ID, text)
