@@ -221,22 +221,26 @@ func (b *Bot) handleNewRule(message *tgbotapi.Message) {
 	
 	if len(suggestion.Suggestions.BankName) > 0 {
 		suggestedBank := suggestion.Suggestions.BankName[0].Value
-		// Сравниваем без учета регистра и пробелов
-		if !strings.EqualFold(strings.TrimSpace(suggestedBank), strings.TrimSpace(data.BankName)) {
+		originalBank := strings.TrimSpace(data.BankName)
+		suggestedBankTrimmed := strings.TrimSpace(suggestedBank)
+		
+		// Сравниваем точно (с учетом пробелов внутри), но без учета регистра и лишних пробелов по краям
+		if originalBank != suggestedBankTrimmed {
 			realSuggestions = append(realSuggestions, fmt.Sprintf("🏦 Банк: %s → %s",
-				data.BankName, suggestedBank))
+				originalBank, suggestedBankTrimmed))
 			hasRealSuggestions = true
 		}
 	}
 	
 	if len(suggestion.Suggestions.Category) > 0 {
 		suggestedCategory := suggestion.Suggestions.Category[0].Value
-		// Сравниваем без учета регистра и пробелов
-		normalizedOriginal := strings.ToLower(strings.ReplaceAll(data.Category, " ", ""))
-		normalizedSuggested := strings.ToLower(strings.ReplaceAll(suggestedCategory, " ", ""))
-		if normalizedOriginal != normalizedSuggested {
+		originalCategory := strings.TrimSpace(data.Category)
+		suggestedCategoryTrimmed := strings.TrimSpace(suggestedCategory)
+		
+		// Сравниваем точно (с учетом пробелов внутри)
+		if originalCategory != suggestedCategoryTrimmed {
 			realSuggestions = append(realSuggestions, fmt.Sprintf("📁 Категория: %s → %s",
-				data.Category, suggestedCategory))
+				originalCategory, suggestedCategoryTrimmed))
 			hasRealSuggestions = true
 		}
 	}
