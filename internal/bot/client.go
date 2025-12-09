@@ -217,11 +217,84 @@ func (c *APIClient) ListCashback(userID string, limit, offset int) (*models.List
 	return &result, nil
 }
 
+// GetCashbackByID получает правило по ID
+func (c *APIClient) GetCashbackByID(id int64) (*models.CashbackRule, error) {
+	requestURL := fmt.Sprintf("%s/api/v1/cashback/%d", c.baseURL, id)
+	
+	resp, err := c.httpClient.Get(requestURL)
+	if err != nil {
+		return nil, fmt.Errorf("ошибка запроса: %w", err)
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("ошибка чтения ответа: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		var errResp models.ErrorResponse
+		if err := json.Unmarshal(respBody, &errResp); err == nil {
+			return nil, fmt.Errorf("%s", errResp.Error)
+		}
+		return nil, fmt.Errorf("ошибка API: статус %d", resp.StatusCode)
+	}
+
+	var result models.CashbackRule
+	if err := json.Unmarshal(respBody, &result); err != nil {
+		return nil, fmt.Errorf("ошибка десериализации: %w", err)
+	}
+
+	return &result, nil
+}
+
+// UpdateCashback обновляет правило кэшбэка
+func (c *APIClient) UpdateCashback(id int64, req *models.UpdateCashbackRequest) (*models.CashbackRule, error) {
+	requestURL := fmt.Sprintf("%s/api/v1/cashback/%d", c.baseURL, id)
+	
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("ошибка сериализации: %w", err)
+	}
+
+	httpReq, err := http.NewRequest(http.MethodPut, requestURL, bytes.NewBuffer(body))
+	if err != nil {
+		return nil, fmt.Errorf("ошибка создания запроса: %w", err)
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.httpClient.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("ошибка запроса: %w", err)
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("ошибка чтения ответа: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		var errResp models.ErrorResponse
+		if err := json.Unmarshal(respBody, &errResp); err == nil {
+			return nil, fmt.Errorf("%s", errResp.Error)
+		}
+		return nil, fmt.Errorf("ошибка API: статус %d", resp.StatusCode)
+	}
+
+	var result models.CashbackRule
+	if err := json.Unmarshal(respBody, &result); err != nil {
+		return nil, fmt.Errorf("ошибка десериализации: %w", err)
+	}
+
+	return &result, nil
+}
+
 // DeleteCashback удаляет правило по ID
 func (c *APIClient) DeleteCashback(id int64) error {
-	url := fmt.Sprintf("%s/api/v1/cashback/%d", c.baseURL, id)
+	requestURL := fmt.Sprintf("%s/api/v1/cashback/%d", c.baseURL, id)
 	
-	req, err := http.NewRequest(http.MethodDelete, url, nil)
+	req, err := http.NewRequest(http.MethodDelete, requestURL, nil)
 	if err != nil {
 		return fmt.Errorf("ошибка создания запроса: %w", err)
 	}

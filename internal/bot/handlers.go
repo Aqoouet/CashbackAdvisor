@@ -23,6 +23,7 @@ type UserState struct {
 	State      string
 	Data       *ParsedData
 	Suggestion *models.SuggestResponse
+	RuleID     int64 // Для обновления/удаления
 }
 
 // NewBot создает нового бота
@@ -79,6 +80,10 @@ func (b *Bot) handleMessage(message *tgbotapi.Message) {
 			b.handleList(message)
 		case "best":
 			b.handleBestCommand(message)
+		case "update":
+			b.handleUpdateCommand(message)
+		case "delete":
+			b.handleDeleteCommand(message)
 		case "cancel":
 			b.handleCancel(message)
 		default:
@@ -96,6 +101,12 @@ func (b *Bot) handleMessage(message *tgbotapi.Message) {
 			return
 		case "awaiting_bank_correction":
 			b.handleBankCorrection(message, state)
+			return
+		case "awaiting_update_data":
+			b.handleUpdateData(message, state)
+			return
+		case "awaiting_delete_confirmation":
+			b.handleDeleteConfirmation(message, state)
 			return
 		}
 	}
@@ -127,6 +138,8 @@ func (b *Bot) handleStart(message *tgbotapi.Message) {
 		"📋 Команды:\n"+
 		"/list - мои правила\n"+
 		"/best - найти лучший кэшбэк\n"+
+		"/update ID - обновить правило\n"+
+		"/delete ID - удалить правило\n"+
 		"/help - подробная справка\n\n"+
 		"Я пойму, проверю и сохраню! 😊\n\n"+
 		"ℹ️ Версия: %s", BuildInfo())
@@ -140,6 +153,8 @@ func (b *Bot) handleHelp(message *tgbotapi.Message) {
 		"🔹 /add - Добавить новое правило кэшбэка\n"+
 		"🔹 /list - Показать мои правила\n"+
 		"🔹 /best - Найти лучший кэшбэк\n"+
+		"🔹 /update ID - Обновить правило\n"+
+		"🔹 /delete ID - Удалить правило\n"+
 		"🔹 /cancel - Отменить текущую операцию\n\n"+
 		"💡 Формат добавления правил (с запятыми):\n"+
 		"Банк, Категория, Процент, Сумма[, Месяц]\n\n"+
@@ -731,6 +746,185 @@ func (b *Bot) sendMessage(chatID int64, text string) {
 	if _, err := b.api.Send(msg); err != nil {
 		log.Printf("❌ Ошибка отправки сообщения: %v", err)
 	}
+}
+
+// handleUpdateCommand обрабатывает команду /update ID
+func (b *Bot) handleUpdateCommand(message *tgbotapi.Message) {
+	args := strings.Fields(message.Text)
+	if len(args) < 2 {
+		b.sendMessage(message.Chat.ID, "❌ Укажите ID правила.\n\nПример: /update 5")
+		return
+	}
+
+	id, err := strconv.ParseInt(args[1], 10, 64)
+	if err != nil {
+		b.sendMessage(message.Chat.ID, "❌ Неверный формат ID. Используйте число.")
+		return
+	}
+
+	// Запрашиваем правило у API
+	rule, err := b.client.GetCashbackByID(id)
+	if err != nil {
+		b.sendMessage(message.Chat.ID, fmt.Sprintf("❌ Правило с ID %d не найдено.", id))
+		return
+	}
+
+	// Проверяем, что это правило пользователя
+	if rule.UserID != strconv.FormatInt(message.From.ID, 10) {
+		b.sendMessage(message.Chat.ID, "❌ Вы можете обновлять только свои правила.")
+		return
+	}
+
+	// Показываем текущие данные
+	text := fmt.Sprintf("📝 Обновление правила ID: %d\n\n"+
+		"Текущие данные:\n"+
+		"🏦 Банк: %s\n"+
+		"📁 Категория: %s\n"+
+		"📅 Месяц: %s\n"+
+		"💰 Кэшбэк: %.1f%%\n"+
+		"💵 Макс. сумма: %.0f₽\n\n"+
+		"Отправьте новые данные через запятую:\n"+
+		"Банк, Категория, Процент, Сумма[, Месяц]",
+		rule.ID,
+		rule.BankName,
+		rule.Category,
+		rule.MonthYear.Format("01/2006"),
+		rule.CashbackPercent,
+		rule.MaxAmount,
+	)
+
+	b.sendMessage(message.Chat.ID, text)
+
+	// Сохраняем состояние ожидания данных
+	b.userStates[message.From.ID] = &UserState{
+		State:  "awaiting_update_data",
+		RuleID: id,
+	}
+}
+
+// handleUpdateData обрабатывает ввод новых данных для обновления
+func (b *Bot) handleUpdateData(message *tgbotapi.Message, state *UserState) {
+	// Парсим новые данные
+	data, err := ParseMessage(message.Text)
+	if err != nil {
+		b.sendMessage(message.Chat.ID, fmt.Sprintf("❌ Ошибка парсинга: %s", err))
+		return
+	}
+
+	// Проверяем данные
+	missing := ValidateParsedData(data)
+	if len(missing) > 0 {
+		text := "⚠️ Не хватает данных:\n" + strings.Join(missing, ", ") + "\n\n" +
+			"Формат: Банк, Категория, Процент, Сумма[, Месяц]"
+		b.sendMessage(message.Chat.ID, text)
+		return
+	}
+
+	// Обновляем правило через API
+	req := &models.UpdateCashbackRequest{
+		GroupName:       "Общие",
+		Category:        data.Category,
+		BankName:        data.BankName,
+		MonthYear:       data.MonthYear,
+		CashbackPercent: data.CashbackPercent,
+		MaxAmount:       data.MaxAmount,
+	}
+
+	rule, err := b.client.UpdateCashback(state.RuleID, req)
+	if err != nil {
+		b.sendMessage(message.Chat.ID, fmt.Sprintf("❌ Ошибка обновления: %s", err))
+		delete(b.userStates, message.From.ID)
+		return
+	}
+
+	text := fmt.Sprintf("✅ Правило обновлено!\n\n"+
+		"🆔 ID: %d\n"+
+		"🏦 Банк: %s\n"+
+		"📁 Категория: %s\n"+
+		"📅 Месяц: %s\n"+
+		"💰 Кэшбэк: %.1f%%\n"+
+		"💵 Макс. сумма: %.0f₽",
+		rule.ID,
+		rule.BankName,
+		rule.Category,
+		rule.MonthYear.Format("2006-01"),
+		rule.CashbackPercent,
+		rule.MaxAmount,
+	)
+
+	b.sendMessage(message.Chat.ID, text)
+	delete(b.userStates, message.From.ID)
+}
+
+// handleDeleteCommand обрабатывает команду /delete ID
+func (b *Bot) handleDeleteCommand(message *tgbotapi.Message) {
+	args := strings.Fields(message.Text)
+	if len(args) < 2 {
+		b.sendMessage(message.Chat.ID, "❌ Укажите ID правила.\n\nПример: /delete 5")
+		return
+	}
+
+	id, err := strconv.ParseInt(args[1], 10, 64)
+	if err != nil {
+		b.sendMessage(message.Chat.ID, "❌ Неверный формат ID. Используйте число.")
+		return
+	}
+
+	// Запрашиваем правило у API для проверки
+	rule, err := b.client.GetCashbackByID(id)
+	if err != nil {
+		b.sendMessage(message.Chat.ID, fmt.Sprintf("❌ Правило с ID %d не найдено.", id))
+		return
+	}
+
+	// Проверяем, что это правило пользователя
+	if rule.UserID != strconv.FormatInt(message.From.ID, 10) {
+		b.sendMessage(message.Chat.ID, "❌ Вы можете удалять только свои правила.")
+		return
+	}
+
+	// Показываем данные и запрашиваем подтверждение
+	text := fmt.Sprintf("⚠️ Вы уверены, что хотите удалить правило?\n\n"+
+		"🆔 ID: %d\n"+
+		"🏦 Банк: %s\n"+
+		"📁 Категория: %s\n"+
+		"💰 Кэшбэк: %.1f%%\n"+
+		"💵 Макс. сумма: %.0f₽",
+		rule.ID,
+		rule.BankName,
+		rule.Category,
+		rule.CashbackPercent,
+		rule.MaxAmount,
+	)
+
+	b.sendMessageWithButtons(message.Chat.ID, text, [][]string{
+		{"✅ Да, удалить", "❌ Отмена"},
+	})
+
+	// Сохраняем состояние ожидания подтверждения
+	b.userStates[message.From.ID] = &UserState{
+		State:  "awaiting_delete_confirmation",
+		RuleID: id,
+	}
+}
+
+// handleDeleteConfirmation обрабатывает подтверждение удаления
+func (b *Bot) handleDeleteConfirmation(message *tgbotapi.Message, state *UserState) {
+	text := strings.ToLower(strings.TrimSpace(message.Text))
+
+	if strings.Contains(text, "да") || strings.Contains(text, "удалить") {
+		// Удаляем правило
+		err := b.client.DeleteCashback(state.RuleID)
+		if err != nil {
+			b.sendMessage(message.Chat.ID, fmt.Sprintf("❌ Ошибка удаления: %s", err))
+		} else {
+			b.sendMessage(message.Chat.ID, fmt.Sprintf("✅ Правило ID %d успешно удалено!", state.RuleID))
+		}
+	} else {
+		b.sendMessage(message.Chat.ID, "❌ Удаление отменено.")
+	}
+
+	delete(b.userStates, message.From.ID)
 }
 
 // sendMessageWithButtons отправляет сообщение с кнопками

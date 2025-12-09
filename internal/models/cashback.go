@@ -34,13 +34,12 @@ type CreateCashbackRequest struct {
 
 // UpdateCashbackRequest представляет запрос на обновление правила
 type UpdateCashbackRequest struct {
-	GroupName       *string  `json:"group_name,omitempty"`
-	Category        *string  `json:"category,omitempty"`
-	BankName        *string  `json:"bank_name,omitempty"`
-	UserDisplayName *string  `json:"user_display_name,omitempty"`
-	MonthYear       *string  `json:"month_year,omitempty"`
-	CashbackPercent *float64 `json:"cashback_percent,omitempty"`
-	MaxAmount       *float64 `json:"max_amount,omitempty"`
+	GroupName       string  `json:"group_name"`
+	Category        string  `json:"category"`
+	BankName        string  `json:"bank_name"`
+	MonthYear       string  `json:"month_year"`
+	CashbackPercent float64 `json:"cashback_percent"`
+	MaxAmount       float64 `json:"max_amount"`
 }
 
 // SuggestRequest представляет запрос на анализ данных
