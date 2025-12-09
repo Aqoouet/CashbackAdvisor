@@ -98,8 +98,16 @@ func ParseMessage(text string) (*ParsedData, error) {
 		for _, word := range words {
 			// Пропускаем банк, числа, процент, рубли, месяцы
 			wordLower := strings.ToLower(word)
+			
+			// Проверяем, не является ли слово названием банка
+			isBankName := false
+			if data.BankName != "" {
+				isBankName = strings.Contains(wordLower, strings.ToLower(data.BankName)) ||
+							 strings.Contains(strings.ToLower(data.BankName), wordLower)
+			}
+			
 			if len(word) > 2 && !isNumber(word) && 
-			   !strings.EqualFold(word, data.BankName) &&
+			   !isBankName &&
 			   !strings.Contains(wordLower, "%") &&
 			   !strings.Contains(wordLower, "руб") &&
 			   !strings.HasSuffix(wordLower, "р") &&

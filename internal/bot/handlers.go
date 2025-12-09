@@ -155,6 +155,10 @@ func (b *Bot) handleNewRule(message *tgbotapi.Message) {
 		return
 	}
 
+	// Логируем распознанные данные для отладки
+	log.Printf("🔍 Распознано: Bank='%s', Category='%s', Percent=%.1f%%, Amount=%.0f, Month='%s'",
+		data.BankName, data.Category, data.CashbackPercent, data.MaxAmount, data.MonthYear)
+
 	// Проверяем, что все данные есть
 	missing := ValidateParsedData(data)
 	if len(missing) > 0 {
