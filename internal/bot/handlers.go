@@ -142,7 +142,7 @@ func (b *Bot) handleMessage(message *tgbotapi.Message) {
 		return
 	}
 
-	// Есть запятая - это добавление правила
+	// Есть запятая - это добавление % кешбека
 	b.handleNewRule(message)
 }
 
@@ -153,18 +153,18 @@ func (b *Bot) handleStart(message *tgbotapi.Message) {
 		"• Запоминаю условия кэшбэка от разных банков\n"+
 		"• Подсказываю, где сейчас самый выгодный кэшбэк\n"+
 		"• Исправляю опечатки в названиях банков и категорий\n"+
-		"• Показываю все твои сохранённые правила\n\n"+
-		"✍️ Добавить правило (месяц опционален):\n"+
+		"• Показываю все сохранённые % кешбека\n\n"+
+		"✍️ Добавить % кешбек (месяц опционален):\n"+
 		"\"Тинькофф, Такси, 5%%, 3000\"\n"+
 		"\"Сбер, Перекресток доставка, 12%%, 30000, январь\"\n\n"+
 		"🔍 Найти лучший кэшбэк (без запятых):\n"+
 		"\"Такси\" - покажет для текущего месяца\n"+
 		"\"Перекресток доставка\"\n\n"+
 		"📋 Команды:\n"+
-		"/list - все правила (от всех пользователей)\n"+
+		"/list - все % кешбека группы\n"+
 		"/best - найти лучший кэшбэк\n"+
-		"/update ID - обновить своё правило\n"+
-		"/delete ID - удалить своё правило\n"+
+		"/update ID - обновить свой % кешбек\n"+
+		"/delete ID - удалить свой % кешбек\n"+
 		"/help - подробная справка\n\n"+
 		"Я пойму, проверю и сохраню! 😊\n\n"+
 		"ℹ️ Версия: %s", BuildInfo())
@@ -175,13 +175,13 @@ func (b *Bot) handleStart(message *tgbotapi.Message) {
 // handleHelp обрабатывает команду /help
 func (b *Bot) handleHelp(message *tgbotapi.Message) {
 	text := fmt.Sprintf("📖 Подробная справка (Версия: %s)\n\n"+
-		"🔹 /add - Добавить новое правило кэшбэка\n"+
-		"🔹 /list - Показать все правила (от всех пользователей)\n"+
+		"🔹 /add - Добавить новый % кешбек\n"+
+		"🔹 /list - Показать все % кешбека группы\n"+
 		"🔹 /best - Найти лучший кэшбэк среди всех\n"+
-		"🔹 /update ID - Обновить своё правило\n"+
-		"🔹 /delete ID - Удалить своё правило\n"+
+		"🔹 /update ID - Обновить свой % кешбек\n"+
+		"🔹 /delete ID - Удалить свой % кешбек\n"+
 		"🔹 /cancel - Отменить текущую операцию\n\n"+
-		"💡 Формат добавления правил (с запятыми):\n"+
+		"💡 Формат добавления (с запятыми):\n"+
 		"Банк, Категория, Процент, Сумма[, Месяц]\n\n"+
 		"📝 Примеры добавления:\n"+
 		"• \"Тинькофф, Такси, 5%%, 3000\" (месяц = текущий)\n"+
@@ -199,7 +199,7 @@ func (b *Bot) handleHelp(message *tgbotapi.Message) {
 	b.sendMessage(message.Chat.ID, text)
 }
 
-// handleNewRule обрабатывает новое правило от пользователя
+// handleNewRule обрабатывает новый % кешбек от пользователя
 func (b *Bot) handleNewRule(message *tgbotapi.Message) {
 	userID := message.From.ID
 	
@@ -362,7 +362,7 @@ func (b *Bot) handleBankCorrection(message *tgbotapi.Message, state *UserState) 
 		// Продолжаем валидацию с оригинальным названием
 		// Для простоты просто завершим - пользователь может отправить заново
 		delete(b.userStates, message.From.ID)
-		b.sendMessage(message.Chat.ID, "Отправьте правило заново, если хотите продолжить.")
+		b.sendMessage(message.Chat.ID, "Отправьте данные заново, если хотите продолжить.")
 	}
 }
 
@@ -496,7 +496,7 @@ func (b *Bot) handleConfirmation(message *tgbotapi.Message, state *UserState) {
 	delete(b.userStates, message.From.ID)
 }
 
-// saveRule сохраняет правило через API
+// saveRule сохраняет % кешбек через API
 func (b *Bot) saveRule(chatID int64, user *tgbotapi.User, data *ParsedData, force bool) {
 	req := &models.CreateCashbackRequest{
 		GroupName:       "Общие",
@@ -520,7 +520,7 @@ func (b *Bot) saveRule(chatID int64, user *tgbotapi.User, data *ParsedData, forc
 	}
 
 	text := fmt.Sprintf(
-		"✅ Правило успешно сохранено!\n\n"+
+		"✅ % кешбек успешно сохранён!\n\n"+
 			"🆔 ID: %d\n"+
 			"🏦 Банк: %s\n"+
 			"📁 Категория: %s\n"+
@@ -542,7 +542,7 @@ func (b *Bot) saveRule(chatID int64, user *tgbotapi.User, data *ParsedData, forc
 
 // handleList обрабатывает команду /list
 func (b *Bot) handleList(message *tgbotapi.Message) {
-	// Получаем список ВСЕХ правил (пустой userID = все пользователи)
+	// Получаем список всех % кешбека группы
 	list, err := b.client.ListCashback("", 100, 0)
 	if err != nil {
 		b.sendMessage(message.Chat.ID, fmt.Sprintf("❌ Ошибка: %s", err))
@@ -550,11 +550,11 @@ func (b *Bot) handleList(message *tgbotapi.Message) {
 	}
 
 	if len(list.Rules) == 0 {
-		b.sendMessage(message.Chat.ID, "📝 У вас пока нет правил кэшбэка.\n\nИспользуйте /add для добавления.")
+		b.sendMessage(message.Chat.ID, "📝 Пока нет % кешбека в группе.\n\nДобавьте первым!")
 		return
 	}
 
-	text := fmt.Sprintf("📋 Все правила кэшбэка (%d):\n\n", list.Total)
+	text := fmt.Sprintf("📋 Все % кешбека группы (%d):\n\n", list.Total)
 	for i, rule := range list.Rules {
 		text += fmt.Sprintf(
 			"%d. %s - %s\n   %.1f%% до %.0f₽ (%s)\n   👤 Карта: %s\n   ID: %d\n\n",
@@ -679,8 +679,8 @@ func (b *Bot) handleBestQueryByCategory(message *tgbotapi.Message) {
 		b.sendMessage(message.Chat.ID, fmt.Sprintf("❌ Кэшбэк не найден\n\n"+
 			"📁 Категория: \"%s\"\n"+
 			"📅 Месяц: %s\n\n"+
-			"💡 Похоже, у вас ещё нет правил для этой категории.\n\n"+
-			"Чтобы добавить правило, напишите через запятую:\n"+
+			"💡 Похоже, ещё нет % кешбека для этой категории.\n\n"+
+			"Чтобы добавить, напишите через запятую:\n"+
 			"Банк, %s, Процент, Сумма", 
 			category, monthYear, category))
 		return
@@ -729,7 +729,7 @@ func (b *Bot) handleBestQuery(message *tgbotapi.Message) {
 	// Вызываем API для поиска лучшего кэшбэка
 	rule, err := b.client.GetBestCashback("Общие", data.Category, data.MonthYear)
 	if err != nil {
-		b.sendMessage(message.Chat.ID, fmt.Sprintf("❌ Не найдено правил для категории \"%s\" в %s\n\nДобавьте правило или попробуйте другую категорию.", data.Category, data.MonthYear))
+		b.sendMessage(message.Chat.ID, fmt.Sprintf("❌ Не найдено % кешбека для категории \"%s\" в %s\n\nДобавьте или попробуйте другую категорию.", data.Category, data.MonthYear))
 		return
 	}
 	
@@ -928,7 +928,7 @@ func (b *Bot) sendMessage(chatID int64, text string) {
 func (b *Bot) handleUpdateCommand(message *tgbotapi.Message) {
 	args := strings.Fields(message.Text)
 	if len(args) < 2 {
-		b.sendMessage(message.Chat.ID, "❌ Укажите ID правила.\n\nПример: /update 5")
+		b.sendMessage(message.Chat.ID, "❌ Укажите ID % кешбека.\n\nПример: /update 5")
 		return
 	}
 
@@ -938,21 +938,21 @@ func (b *Bot) handleUpdateCommand(message *tgbotapi.Message) {
 		return
 	}
 
-	// Запрашиваем правило у API
+	// Запрашиваем данные у API
 	rule, err := b.client.GetCashbackByID(id)
 	if err != nil {
-		b.sendMessage(message.Chat.ID, fmt.Sprintf("❌ Правило с ID %d не найдено.", id))
+		b.sendMessage(message.Chat.ID, fmt.Sprintf("❌ % кешбек с ID %d не найден.", id))
 		return
 	}
 
-	// Проверяем, что это правило пользователя
+	// Проверяем, что это % кешбек пользователя
 	if rule.UserID != strconv.FormatInt(message.From.ID, 10) {
-		b.sendMessage(message.Chat.ID, "❌ Вы можете обновлять только свои правила.")
+		b.sendMessage(message.Chat.ID, "❌ Вы можете обновлять только свой % кешбек.")
 		return
 	}
 
 	// Показываем текущие данные
-	text := fmt.Sprintf("📝 Обновление правила ID: %d\n\n"+
+	text := fmt.Sprintf("📝 Обновление % кешбека ID: %d\n\n"+
 		"Текущие данные:\n"+
 		"🏦 Банк: %s\n"+
 		"📁 Категория: %s\n"+
@@ -996,7 +996,7 @@ func (b *Bot) handleUpdateData(message *tgbotapi.Message, state *UserState) {
 		return
 	}
 
-	// Обновляем правило через API
+	// Обновляем % кешбек через API
 	req := &models.UpdateCashbackRequest{
 		GroupName:       "Общие",
 		Category:        data.Category,
@@ -1013,7 +1013,7 @@ func (b *Bot) handleUpdateData(message *tgbotapi.Message, state *UserState) {
 		return
 	}
 
-	text := fmt.Sprintf("✅ Правило обновлено!\n\n"+
+	text := fmt.Sprintf("✅ % кешбек обновлён!\n\n"+
 		"🆔 ID: %d\n"+
 		"🏦 Банк: %s\n"+
 		"📁 Категория: %s\n"+
@@ -1036,7 +1036,7 @@ func (b *Bot) handleUpdateData(message *tgbotapi.Message, state *UserState) {
 func (b *Bot) handleDeleteCommand(message *tgbotapi.Message) {
 	args := strings.Fields(message.Text)
 	if len(args) < 2 {
-		b.sendMessage(message.Chat.ID, "❌ Укажите ID правила.\n\nПример: /delete 5")
+		b.sendMessage(message.Chat.ID, "❌ Укажите ID % кешбека.\n\nПример: /delete 5")
 		return
 	}
 
@@ -1046,21 +1046,21 @@ func (b *Bot) handleDeleteCommand(message *tgbotapi.Message) {
 		return
 	}
 
-	// Запрашиваем правило у API для проверки
+	// Запрашиваем данные у API для проверки
 	rule, err := b.client.GetCashbackByID(id)
 	if err != nil {
-		b.sendMessage(message.Chat.ID, fmt.Sprintf("❌ Правило с ID %d не найдено.", id))
+		b.sendMessage(message.Chat.ID, fmt.Sprintf("❌ % кешбек с ID %d не найден.", id))
 		return
 	}
 
-	// Проверяем, что это правило пользователя
+	// Проверяем, что это % кешбек пользователя
 	if rule.UserID != strconv.FormatInt(message.From.ID, 10) {
-		b.sendMessage(message.Chat.ID, "❌ Вы можете удалять только свои правила.")
+		b.sendMessage(message.Chat.ID, "❌ Вы можете удалять только свой % кешбек.")
 		return
 	}
 
 	// Показываем данные и запрашиваем подтверждение
-	text := fmt.Sprintf("⚠️ Вы уверены, что хотите удалить правило?\n\n"+
+	text := fmt.Sprintf("⚠️ Вы уверены, что хотите удалить % кешбек?\n\n"+
 		"🆔 ID: %d\n"+
 		"🏦 Банк: %s\n"+
 		"📁 Категория: %s\n"+
@@ -1089,12 +1089,12 @@ func (b *Bot) handleDeleteConfirmation(message *tgbotapi.Message, state *UserSta
 	text := strings.ToLower(strings.TrimSpace(message.Text))
 
 	if strings.Contains(text, "да") || strings.Contains(text, "удалить") {
-		// Удаляем правило
+		// Удаляем % кешбек
 		err := b.client.DeleteCashback(state.RuleID)
 		if err != nil {
 			b.sendMessage(message.Chat.ID, fmt.Sprintf("❌ Ошибка удаления: %s", err))
 		} else {
-			b.sendMessage(message.Chat.ID, fmt.Sprintf("✅ Правило ID %d успешно удалено!", state.RuleID))
+			b.sendMessage(message.Chat.ID, fmt.Sprintf("✅ % кешбек ID %d успешно удалён!", state.RuleID))
 		}
 	} else {
 		b.sendMessage(message.Chat.ID, "❌ Удаление отменено.")
