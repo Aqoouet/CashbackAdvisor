@@ -13,9 +13,10 @@ import (
 
 // Bot представляет Telegram бота
 type Bot struct {
-	api       *tgbotapi.BotAPI
-	client    *APIClient
+	api        *tgbotapi.BotAPI
+	client     *APIClient
 	userStates map[int64]*UserState
+	groups     *GroupsStore
 }
 
 // UserState хранит состояние пользователя
@@ -36,10 +37,14 @@ func NewBot(token string, apiClient *APIClient, debug bool) (*Bot, error) {
 	api.Debug = debug
 	log.Printf("✅ Авторизован как @%s", api.Self.UserName)
 
+	// Инициализируем хранилище групп
+	groupsStore := NewGroupsStore("groups.json")
+
 	return &Bot{
 		api:        api,
 		client:     apiClient,
 		userStates: make(map[int64]*UserState),
+		groups:     groupsStore,
 	}, nil
 }
 
@@ -74,6 +79,12 @@ func (b *Bot) handleMessage(message *tgbotapi.Message) {
 			b.handleStart(message)
 		case "help":
 			b.handleHelp(message)
+		case "creategroup":
+			b.handleCreateGroup(message)
+		case "joingroup":
+			b.handleJoinGroup(message)
+		case "groupinfo":
+			b.handleGroupInfo(message)
 		case "add":
 			b.handleAddCommand(message)
 		case "list":
@@ -92,6 +103,17 @@ func (b *Bot) handleMessage(message *tgbotapi.Message) {
 		return
 	}
 
+	// Проверяем, состоит ли пользователь в группе (кроме команд для групп)
+	userIDStr := strconv.FormatInt(message.From.ID, 10)
+	if _, inGroup := b.groups.GetUserGroup(userIDStr); !inGroup {
+		b.sendMessage(message.Chat.ID, 
+			"⚠️ Вы не состоите в группе!\n\n"+
+			"Сначала создайте группу или присоединитесь к существующей:\n"+
+			"/creategroup название - создать новую группу\n"+
+			"/joingroup название - присоединиться к группе")
+		return
+	}
+
 	// Обработка состояний пользователя
 	state, exists := b.userStates[userID]
 	if exists {
@@ -107,6 +129,9 @@ func (b *Bot) handleMessage(message *tgbotapi.Message) {
 			return
 		case "awaiting_delete_confirmation":
 			b.handleDeleteConfirmation(message, state)
+			return
+		case "awaiting_group_name":
+			b.handleGroupNameInput(message)
 			return
 		}
 	}
@@ -726,6 +751,156 @@ func (b *Bot) handleBestQuery(message *tgbotapi.Message) {
 	)
 	
 	b.sendMessage(message.Chat.ID, text)
+}
+
+// handleCreateGroup обрабатывает команду /creategroup
+func (b *Bot) handleCreateGroup(message *tgbotapi.Message) {
+	args := strings.Fields(message.Text)
+	if len(args) < 2 {
+		b.sendMessage(message.Chat.ID, "❌ Укажите название группы.\n\nПример: /creategroup Семья")
+		return
+	}
+
+	groupName := strings.Join(args[1:], " ")
+	userIDStr := strconv.FormatInt(message.From.ID, 10)
+
+	// Проверяем, не состоит ли пользователь уже в группе
+	if currentGroup, inGroup := b.groups.GetUserGroup(userIDStr); inGroup {
+		b.sendMessage(message.Chat.ID, fmt.Sprintf("⚠️ Вы уже состоите в группе \"%s\"", currentGroup))
+		return
+	}
+
+	// Создаём группу
+	err := b.groups.CreateGroup(groupName, userIDStr)
+	if err != nil {
+		b.sendMessage(message.Chat.ID, fmt.Sprintf("❌ %s", err))
+		return
+	}
+
+	b.sendMessage(message.Chat.ID, fmt.Sprintf("✅ Группа \"%s\" успешно создана!\n\nВы можете пригласить друзей командой:\n/joingroup %s", groupName, groupName))
+}
+
+// handleJoinGroup обрабатывает команду /joingroup
+func (b *Bot) handleJoinGroup(message *tgbotapi.Message) {
+	args := strings.Fields(message.Text)
+	if len(args) < 2 {
+		// Показываем список доступных групп
+		groups := b.groups.GetAllGroups()
+		if len(groups) == 0 {
+			b.sendMessage(message.Chat.ID, "📝 Пока нет групп.\n\nСоздайте первую группу: /creategroup Название")
+			return
+		}
+
+		text := "📋 Доступные группы:\n\n"
+		for i, group := range groups {
+			text += fmt.Sprintf("%d. %s\n", i+1, group)
+		}
+		text += "\nДля присоединения: /joingroup Название"
+		b.sendMessage(message.Chat.ID, text)
+		return
+	}
+
+	groupName := strings.Join(args[1:], " ")
+	userIDStr := strconv.FormatInt(message.From.ID, 10)
+
+	// Проверяем, не состоит ли пользователь уже в группе
+	if currentGroup, inGroup := b.groups.GetUserGroup(userIDStr); inGroup {
+		b.sendMessage(message.Chat.ID, fmt.Sprintf("⚠️ Вы уже состоите в группе \"%s\"", currentGroup))
+		return
+	}
+
+	// Проверяем существование группы
+	if !b.groups.GroupExists(groupName) {
+		b.sendMessage(message.Chat.ID, fmt.Sprintf("❌ Группа \"%s\" не существует.\n\nСоздайте её: /creategroup %s", groupName, groupName))
+		return
+	}
+
+	// Присоединяемся к группе
+	err := b.groups.SetUserGroup(userIDStr, groupName)
+	if err != nil {
+		b.sendMessage(message.Chat.ID, fmt.Sprintf("❌ Ошибка: %s", err))
+		return
+	}
+
+	b.sendMessage(message.Chat.ID, fmt.Sprintf("✅ Вы присоединились к группе \"%s\"!", groupName))
+}
+
+// handleGroupInfo обрабатывает команду /groupinfo
+func (b *Bot) handleGroupInfo(message *tgbotapi.Message) {
+	args := strings.Fields(message.Text)
+	userIDStr := strconv.FormatInt(message.From.ID, 10)
+
+	var groupName string
+	if len(args) < 2 {
+		// Показываем текущую группу пользователя
+		var inGroup bool
+		groupName, inGroup = b.groups.GetUserGroup(userIDStr)
+		if !inGroup {
+			b.sendMessage(message.Chat.ID, "❌ Вы не состоите в группе")
+			return
+		}
+	} else {
+		groupName = strings.Join(args[1:], " ")
+		if !b.groups.GroupExists(groupName) {
+			b.sendMessage(message.Chat.ID, fmt.Sprintf("❌ Группа \"%s\" не существует", groupName))
+			return
+		}
+	}
+
+	// Получаем участников группы
+	members := b.groups.GetGroupMembers(groupName)
+	
+	text := fmt.Sprintf("📊 Группа: %s\n\n", groupName)
+	text += fmt.Sprintf("👥 Участников: %d\n\n", len(members))
+
+	// Получаем кэшбэк в текущем месяце для группы
+	now := time.Now()
+	monthYear := fmt.Sprintf("%d-%02d", now.Year(), now.Month())
+	
+	// Получаем список всех кэшбэков группы
+	list, err := b.client.ListCashback("", 1000, 0)
+	if err == nil && len(list.Rules) > 0 {
+		// Группируем по категориям
+		categories := make(map[string][]string)
+		for _, rule := range list.Rules {
+			if rule.GroupName == groupName && rule.MonthYear.Format("2006-01") == monthYear {
+				category := rule.Category
+				info := fmt.Sprintf("%.1f%% (%s, карта: %s)", rule.CashbackPercent, rule.BankName, rule.UserDisplayName)
+				categories[category] = append(categories[category], info)
+			}
+		}
+
+		if len(categories) > 0 {
+			text += "💰 Кэшбэк в текущем месяце:\n\n"
+			for category, infos := range categories {
+				text += fmt.Sprintf("📁 %s:\n", category)
+				for _, info := range infos {
+					text += fmt.Sprintf("   • %s\n", info)
+				}
+				text += "\n"
+			}
+		} else {
+			text += "💡 Пока нет кэшбэков в текущем месяце"
+		}
+	}
+
+	b.sendMessage(message.Chat.ID, text)
+}
+
+// handleGroupNameInput обрабатывает ввод названия группы
+func (b *Bot) handleGroupNameInput(message *tgbotapi.Message) {
+	groupName := strings.TrimSpace(message.Text)
+	userIDStr := strconv.FormatInt(message.From.ID, 10)
+
+	err := b.groups.CreateGroup(groupName, userIDStr)
+	if err != nil {
+		b.sendMessage(message.Chat.ID, fmt.Sprintf("❌ %s", err))
+		delete(b.userStates, message.From.ID)
+		return
+	}
+
+	b.sendMessage(message.Chat.ID, fmt.Sprintf("✅ Группа \"%s\" создана!", groupName))
+	delete(b.userStates, message.From.ID)
 }
 
 // handleCancel обрабатывает команду /cancel
