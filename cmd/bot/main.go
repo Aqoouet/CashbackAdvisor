@@ -10,7 +10,7 @@ import (
 )
 
 func main() {
-	log.Println("🚀 Запуск Telegram бота Open Cashback Advisor...")
+	log.Printf("🚀 Запуск Telegram бота Open Cashback Advisor %s...", bot.BuildInfo())
 
 	// Загрузка конфигурации
 	cfg := bot.LoadConfig()
@@ -40,7 +40,7 @@ func main() {
 		os.Exit(0)
 	}()
 
-	log.Println("🤖 Бот готов к работе!")
+	log.Printf("🤖 Бот %s готов к работе!", bot.BuildInfo())
 	log.Println("📖 Команды:")
 	log.Println("   /start  - Начать работу")
 	log.Println("   /help   - Справка")
