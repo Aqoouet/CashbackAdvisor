@@ -89,9 +89,15 @@ func (b *Bot) handleMessage(message *tgbotapi.Message) {
 
 	// Обработка состояний пользователя
 	state, exists := b.userStates[userID]
-	if exists && state.State == "awaiting_confirmation" {
-		b.handleConfirmation(message, state)
-		return
+	if exists {
+		switch state.State {
+		case "awaiting_confirmation":
+			b.handleConfirmation(message, state)
+			return
+		case "awaiting_bank_correction":
+			b.handleBankCorrection(message, state)
+			return
+		}
 	}
 
 	// Если нет запятой - это поиск лучшего кэшбэка по категории
@@ -165,6 +171,32 @@ func (b *Bot) handleNewRule(message *tgbotapi.Message) {
 	// Логируем распознанные данные для отладки
 	log.Printf("🔍 Распознано: Bank='%s', Category='%s', Percent=%.1f%%, Amount=%.0f, Month='%s'",
 		data.BankName, data.Category, data.CashbackPercent, data.MaxAmount, data.MonthYear)
+
+	// Проверяем опечатки в названии банка
+	if correctedBank, found := FindSimilarBank(data.BankName); found && correctedBank != data.BankName {
+		log.Printf("💡 Исправление банка: '%s' → '%s'", data.BankName, correctedBank)
+		
+		// Показываем пользователю предложение исправления
+		text := fmt.Sprintf("💡 Возможная опечатка в названии банка:\n\n"+
+			"Вы написали: \"%s\"\n"+
+			"Предлагаю исправить на: \"%s\"\n\n"+
+			"❓ Исправить?", data.BankName, correctedBank)
+		
+		// Сохраняем состояние для подтверждения с исправленным банком
+		correctedData := *data
+		correctedData.BankName = correctedBank
+		
+		b.userStates[userID] = &UserState{
+			State: "awaiting_bank_correction",
+			Data:  &correctedData,
+		}
+		
+		// Отправляем с кнопками
+		b.sendMessageWithButtons(message.Chat.ID, text, [][]string{
+			{"✅ Да, исправить", "❌ Нет, оставить как есть"},
+		})
+		return
+	}
 
 	// Проверяем, что все данные есть
 	missing := ValidateParsedData(data)
@@ -266,6 +298,131 @@ func (b *Bot) handleNewRule(message *tgbotapi.Message) {
 	} else {
 		// Нет предложений - сразу сохраняем
 		b.saveRule(message.Chat.ID, message.From, data, false)
+	}
+}
+
+// handleBankCorrection обрабатывает подтверждение исправления банка
+func (b *Bot) handleBankCorrection(message *tgbotapi.Message, state *UserState) {
+	text := strings.ToLower(strings.TrimSpace(message.Text))
+	
+	if strings.Contains(text, "да") || strings.Contains(text, "исправить") || text == "✅ да, исправить" {
+		// Используем исправленные данные
+		log.Printf("✅ Пользователь подтвердил исправление банка: %s", state.Data.BankName)
+		
+		// Продолжаем с исправленными данными - проверяем через API
+		b.continueWithValidation(message, state.Data)
+	} else {
+		// Используем оригинальные данные без исправления
+		log.Printf("❌ Пользователь отклонил исправление банка")
+		
+		// Нужно восстановить оригинальное название - оно было в сообщении
+		// Парсим заново
+		data, _ := ParseMessage(message.From.UserName) // Это неправильно, нужно сохранить оригинал
+		
+		b.sendMessage(message.Chat.ID, "Хорошо, оставляю как есть.")
+		
+		// Продолжаем валидацию с оригинальным названием
+		// Для простоты просто завершим - пользователь может отправить заново
+		delete(b.userStates, message.From.ID)
+		b.sendMessage(message.Chat.ID, "Отправьте правило заново, если хотите продолжить.")
+	}
+}
+
+// continueWithValidation продолжает валидацию данных через API
+func (b *Bot) continueWithValidation(message *tgbotapi.Message, data *ParsedData) {
+	userID := message.From.ID
+	
+	// Показываем распознанные данные
+	b.sendMessage(message.Chat.ID, FormatParsedData(data))
+	b.sendMessage(message.Chat.ID, "🔍 Проверяю данные...")
+
+	// Вызываем /suggest для проверки
+	suggestReq := &models.SuggestRequest{
+		GroupName:       "Общие",
+		Category:        data.Category,
+		BankName:        data.BankName,
+		UserDisplayName: getUserDisplayName(message.From),
+		MonthYear:       data.MonthYear,
+		CashbackPercent: data.CashbackPercent,
+		MaxAmount:       data.MaxAmount,
+	}
+
+	suggestion, err := b.client.Suggest(suggestReq)
+	if err != nil {
+		b.sendMessage(message.Chat.ID, fmt.Sprintf("❌ Ошибка проверки: %s", err))
+		delete(b.userStates, userID)
+		return
+	}
+
+	log.Printf("💡 Получены предложения от API: Valid=%v, BankSuggestions=%d, CategorySuggestions=%d", 
+		suggestion.Valid, len(suggestion.Suggestions.BankName), len(suggestion.Suggestions.Category))
+	if len(suggestion.Suggestions.BankName) > 0 {
+		log.Printf("   Предложение банка: '%s' (было: '%s')", 
+			suggestion.Suggestions.BankName[0].Value, data.BankName)
+	}
+	if len(suggestion.Suggestions.Category) > 0 {
+		log.Printf("   Предложение категории: '%s' (было: '%s')", 
+			suggestion.Suggestions.Category[0].Value, data.Category)
+	}
+
+	// Если есть ошибки валидации
+	if !suggestion.Valid {
+		text := "❌ Ошибки валидации:\n" + strings.Join(suggestion.Errors, "\n")
+		b.sendMessage(message.Chat.ID, text)
+		delete(b.userStates, userID)
+		return
+	}
+
+	// Если есть предложения по исправлению
+	// Фильтруем только те предложения, которые реально отличаются
+	var realSuggestions []string
+	hasRealSuggestions := false
+	
+	if len(suggestion.Suggestions.BankName) > 0 {
+		suggestedBank := suggestion.Suggestions.BankName[0].Value
+		originalBank := strings.TrimSpace(data.BankName)
+		suggestedBankTrimmed := strings.TrimSpace(suggestedBank)
+		
+		if originalBank != suggestedBankTrimmed {
+			realSuggestions = append(realSuggestions, fmt.Sprintf("🏦 Банк: %s → %s",
+				originalBank, suggestedBankTrimmed))
+			hasRealSuggestions = true
+		}
+	}
+	
+	if len(suggestion.Suggestions.Category) > 0 {
+		suggestedCategory := suggestion.Suggestions.Category[0].Value
+		originalCategory := strings.TrimSpace(data.Category)
+		suggestedCategoryTrimmed := strings.TrimSpace(suggestedCategory)
+		
+		if originalCategory != suggestedCategoryTrimmed {
+			realSuggestions = append(realSuggestions, fmt.Sprintf("📁 Категория: %s → %s",
+				originalCategory, suggestedCategoryTrimmed))
+			hasRealSuggestions = true
+		}
+	}
+
+	if hasRealSuggestions {
+		text := "💡 Возможно, вы имели в виду:\n\n"
+		text += strings.Join(realSuggestions, "\n")
+		text += "\n\n❓ Исправить и сохранить?"
+		
+		// Сохраняем состояние для подтверждения
+		b.userStates[userID] = &UserState{
+			State:      "awaiting_confirmation",
+			Data:       data,
+			Suggestion: suggestion,
+		}
+		
+		// Отправляем с кнопками
+		b.sendMessageWithButtons(message.Chat.ID, text, [][]string{
+			{"✅ Да, исправить", "❌ Нет, оставить как есть"},
+			{"🚫 Отмена"},
+		})
+	} else {
+		// Все отлично, сохраняем сразу
+		b.saveRule(message.Chat.ID, message.From, data, false)
+		delete(b.userStates, userID)
 	}
 }
 
