@@ -189,6 +189,17 @@ func (b *Bot) handleNewRule(message *tgbotapi.Message) {
 		return
 	}
 
+	log.Printf("💡 Получены предложения от API: Valid=%v, BankSuggestions=%d, CategorySuggestions=%d", 
+		suggestion.Valid, len(suggestion.Suggestions.BankName), len(suggestion.Suggestions.Category))
+	if len(suggestion.Suggestions.BankName) > 0 {
+		log.Printf("   Предложение банка: '%s' (было: '%s')", 
+			suggestion.Suggestions.BankName[0].Value, data.BankName)
+	}
+	if len(suggestion.Suggestions.Category) > 0 {
+		log.Printf("   Предложение категории: '%s' (было: '%s')", 
+			suggestion.Suggestions.Category[0].Value, data.Category)
+	}
+
 	// Если есть ошибки валидации
 	if !suggestion.Valid {
 		text := "❌ Ошибки валидации:\n" + strings.Join(suggestion.Errors, "\n")
@@ -279,6 +290,9 @@ func (b *Bot) saveRule(chatID int64, user *tgbotapi.User, data *ParsedData, forc
 		MaxAmount:       data.MaxAmount,
 		Force:           force,
 	}
+
+	log.Printf("💾 Сохранение в API: Bank='%s', Category='%s', Force=%v", 
+		req.BankName, req.Category, force)
 
 	rule, err := b.client.CreateCashback(req)
 	if err != nil {
