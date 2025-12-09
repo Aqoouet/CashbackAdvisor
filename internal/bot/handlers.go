@@ -909,7 +909,7 @@ func (b *Bot) handleGroupInfo(message *tgbotapi.Message) {
 	monthYear := fmt.Sprintf("%d-%02d", now.Year(), now.Month())
 	
 	// Получаем список всех кэшбэков группы
-	list, err := b.client.ListCashback("", 1000, 0)
+	list, err := b.client.ListCashback(groupName, 1000, 0)
 	if err == nil && len(list.Rules) > 0 {
 		// Группируем по категориям
 		categories := make(map[string][]string)
