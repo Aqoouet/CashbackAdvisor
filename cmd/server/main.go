@@ -1,0 +1,114 @@
+package main
+
+import (
+	"context"
+	"fmt"
+	"log"
+	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
+
+	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
+	"github.com/go-chi/cors"
+	"github.com/rymax1e/open-cashback-advisor/internal/config"
+	"github.com/rymax1e/open-cashback-advisor/internal/database"
+	"github.com/rymax1e/open-cashback-advisor/internal/handlers"
+	"github.com/rymax1e/open-cashback-advisor/internal/service"
+)
+
+func main() {
+	// Загрузка конфигурации
+	cfg := config.Load()
+
+	log.Println("🚀 Запуск Open Cashback Advisor...")
+
+	// Подключение к базе данных
+	ctx := context.Background()
+	db, err := database.New(ctx, cfg.Database.ConnectionString())
+	if err != nil {
+		log.Fatalf("❌ Не удалось подключиться к базе данных: %v", err)
+	}
+	defer db.Close()
+
+	log.Println("✅ Успешное подключение к базе данных")
+
+	// Создание репозитория, сервиса и обработчиков
+	repo := database.NewRepository(db)
+	svc := service.NewService(repo)
+	handler := handlers.NewHandler(svc)
+
+	// Настройка роутера
+	r := chi.NewRouter()
+
+	// Middleware
+	r.Use(middleware.RequestID)
+	r.Use(middleware.RealIP)
+	r.Use(middleware.Logger)
+	r.Use(middleware.Recoverer)
+	r.Use(middleware.Timeout(60 * time.Second))
+
+	// CORS
+	r.Use(cors.Handler(cors.Options{
+		AllowedOrigins:   []string{"*"},
+		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-Request-ID"},
+		ExposedHeaders:   []string{"Link"},
+		AllowCredentials: false,
+		MaxAge:           300,
+	}))
+
+	// Регистрация маршрутов
+	handler.RegisterRoutes(r)
+
+	// Настройка HTTP сервера
+	addr := fmt.Sprintf("%s:%s", cfg.Server.Host, cfg.Server.Port)
+	srv := &http.Server{
+		Addr:         addr,
+		Handler:      r,
+		ReadTimeout:  15 * time.Second,
+		WriteTimeout: 15 * time.Second,
+		IdleTimeout:  60 * time.Second,
+	}
+
+	// Graceful shutdown
+	done := make(chan bool, 1)
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
+
+	go func() {
+		<-quit
+		log.Println("\n⚠️  Получен сигнал остановки сервера...")
+
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+
+		srv.SetKeepAlivesEnabled(false)
+		if err := srv.Shutdown(ctx); err != nil {
+			log.Fatalf("❌ Не удалось корректно остановить сервер: %v", err)
+		}
+		close(done)
+	}()
+
+	log.Printf("🌐 Сервер запущен на http://%s", addr)
+	log.Println("📖 API документация:")
+	log.Println("   POST   /api/v1/cashback/suggest  - Анализ и предложения")
+	log.Println("   POST   /api/v1/cashback          - Создать правило")
+	log.Println("   GET    /api/v1/cashback          - Список правил")
+	log.Println("   GET    /api/v1/cashback/best     - Лучший кэшбэк")
+	log.Println("   GET    /api/v1/cashback/{id}     - Получить правило")
+	log.Println("   PUT    /api/v1/cashback/{id}     - Обновить правило")
+	log.Println("   DELETE /api/v1/cashback/{id}     - Удалить правило")
+	log.Println("   GET    /health                   - Проверка здоровья")
+	log.Println()
+
+	if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		log.Fatalf("❌ Не удалось запустить сервер: %v", err)
+	}
+
+	<-done
+	log.Println("✅ Сервер корректно остановлен")
+}
+

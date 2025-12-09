@@ -1,0 +1,192 @@
+### Open Cashback Advisor - Примеры API запросов
+
+@baseUrl = http://localhost:8080
+@apiVersion = v1
+
+### 1. Health Check
+GET {{baseUrl}}/health
+
+### 2. Suggest - Анализ и предложения
+POST {{baseUrl}}/api/{{apiVersion}}/cashback/suggest
+Content-Type: application/json
+
+{
+  "group_name": "Транспорт",
+  "category": "такси",
+  "bank_name": "Тинькоф",
+  "user_display_name": "Иван",
+  "month_year": "2024-12",
+  "cashback_percent": 5.5,
+  "max_amount": 3000.0
+}
+
+### 3. Create Cashback Rule - Создание правила
+POST {{baseUrl}}/api/{{apiVersion}}/cashback
+Content-Type: application/json
+
+{
+  "group_name": "Транспорт",
+  "category": "Такси",
+  "bank_name": "Тинькофф",
+  "user_id": "123456789",
+  "user_display_name": "Иван",
+  "month_year": "2024-12",
+  "cashback_percent": 5.5,
+  "max_amount": 3000.0,
+  "force": false
+}
+
+### 4. Create Another Cashback Rule
+POST {{baseUrl}}/api/{{apiVersion}}/cashback
+Content-Type: application/json
+
+{
+  "group_name": "Продукты",
+  "category": "Супермаркеты",
+  "bank_name": "Сбер",
+  "user_id": "987654321",
+  "user_display_name": "Мария",
+  "month_year": "2024-12",
+  "cashback_percent": 10.0,
+  "max_amount": 5000.0
+}
+
+### 5. Get Best Cashback - Лучший кэшбэк
+GET {{baseUrl}}/api/{{apiVersion}}/cashback/best?group_name=Транспорт&category=Такси&month_year=2024-12
+
+### 6. List All Cashback Rules - Список всех правил
+GET {{baseUrl}}/api/{{apiVersion}}/cashback?limit=20&offset=0
+
+### 7. List User Cashback Rules - Список правил пользователя
+GET {{baseUrl}}/api/{{apiVersion}}/cashback?limit=10&offset=0&user_id=123456789
+
+### 8. Get Cashback Rule by ID - Получить правило по ID
+GET {{baseUrl}}/api/{{apiVersion}}/cashback/1
+
+### 9. Update Cashback Rule - Обновить правило
+PUT {{baseUrl}}/api/{{apiVersion}}/cashback/1
+Content-Type: application/json
+
+{
+  "cashback_percent": 6.0,
+  "max_amount": 3500.0
+}
+
+### 10. Delete Cashback Rule - Удалить правило
+DELETE {{baseUrl}}/api/{{apiVersion}}/cashback/1
+
+### 11. Test Validation - Невалидный month_year
+POST {{baseUrl}}/api/{{apiVersion}}/cashback/suggest
+Content-Type: application/json
+
+{
+  "group_name": "Транспорт",
+  "category": "Такси",
+  "bank_name": "Тинькофф",
+  "user_display_name": "Иван",
+  "month_year": "2024-13",
+  "cashback_percent": 5.0,
+  "max_amount": 3000.0
+}
+
+### 12. Test Validation - Невалидный cashback_percent
+POST {{baseUrl}}/api/{{apiVersion}}/cashback/suggest
+Content-Type: application/json
+
+{
+  "group_name": "Транспорт",
+  "category": "Такси",
+  "bank_name": "Тинькофф",
+  "user_display_name": "Иван",
+  "month_year": "2024-12",
+  "cashback_percent": 150.0,
+  "max_amount": 3000.0
+}
+
+### 13. Test Validation - Невалидный max_amount
+POST {{baseUrl}}/api/{{apiVersion}}/cashback/suggest
+Content-Type: application/json
+
+{
+  "group_name": "Транспорт",
+  "category": "Такси",
+  "bank_name": "Тинькофф",
+  "user_display_name": "Иван",
+  "month_year": "2024-12",
+  "cashback_percent": 5.0,
+  "max_amount": -100.0
+}
+
+### 14. Test Fuzzy Search - Опечатки в названиях
+POST {{baseUrl}}/api/{{apiVersion}}/cashback/suggest
+Content-Type: application/json
+
+{
+  "group_name": "Транспорьт",
+  "category": "такски",
+  "bank_name": "тенкоф",
+  "user_display_name": "Иваан",
+  "month_year": "2024-12",
+  "cashback_percent": 5.0,
+  "max_amount": 3000.0
+}
+
+### 15. Create Rule with Multiple Categories
+POST {{baseUrl}}/api/{{apiVersion}}/cashback
+Content-Type: application/json
+
+{
+  "group_name": "Развлечения",
+  "category": "Кино",
+  "bank_name": "Альфа-Банк",
+  "user_id": "111222333",
+  "user_display_name": "Петр",
+  "month_year": "2025-01",
+  "cashback_percent": 15.0,
+  "max_amount": 2000.0
+}
+
+### 16. Create Rule - Restaurants
+POST {{baseUrl}}/api/{{apiVersion}}/cashback
+Content-Type: application/json
+
+{
+  "group_name": "Рестораны",
+  "category": "Кафе",
+  "bank_name": "ВТБ",
+  "user_id": "444555666",
+  "user_display_name": "Анна",
+  "month_year": "2025-01",
+  "cashback_percent": 7.5,
+  "max_amount": 4000.0
+}
+
+### 17. Update Rule - Partial Update
+PUT {{baseUrl}}/api/{{apiVersion}}/cashback/2
+Content-Type: application/json
+
+{
+  "bank_name": "Сбербанк"
+}
+
+### 18. Get Best Cashback - Different Category
+GET {{baseUrl}}/api/{{apiVersion}}/cashback/best?group_name=Продукты&category=Супермаркеты&month_year=2024-12
+
+### 19. Pagination Test - Page 2
+GET {{baseUrl}}/api/{{apiVersion}}/cashback?limit=5&offset=5
+
+### 20. Create with Rounding Test
+POST {{baseUrl}}/api/{{apiVersion}}/cashback
+Content-Type: application/json
+
+{
+  "group_name": "Тест",
+  "category": "Округление",
+  "bank_name": "Тестовый Банк",
+  "user_id": "999888777",
+  "user_display_name": "Тестовый",
+  "month_year": "2024-12",
+  "cashback_percent": 5.556,
+  "max_amount": 1234.567
+}
+
