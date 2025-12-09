@@ -517,9 +517,8 @@ func (b *Bot) saveRule(chatID int64, user *tgbotapi.User, data *ParsedData, forc
 
 // handleList обрабатывает команду /list
 func (b *Bot) handleList(message *tgbotapi.Message) {
-	userID := strconv.FormatInt(message.From.ID, 10)
-	
-	list, err := b.client.ListCashback(userID, 10, 0)
+	// Получаем список ВСЕХ правил (пустой userID = все пользователи)
+	list, err := b.client.ListCashback("", 100, 0)
 	if err != nil {
 		b.sendMessage(message.Chat.ID, fmt.Sprintf("❌ Ошибка: %s", err))
 		return
