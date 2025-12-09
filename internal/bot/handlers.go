@@ -167,7 +167,7 @@ func (b *Bot) handleStart(message *tgbotapi.Message) {
 		"/delete ID - удалить свой %% кешбек\n"+
 		"/help - подробная справка\n\n"+
 		"Я пойму, проверю и сохраню! 😊\n\n"+
-		"ℹ️ Версия: %s", BuildInfo())
+		"ℹ️ Версия: "+BuildInfo())
 
 	b.sendMessage(message.Chat.ID, text)
 }
