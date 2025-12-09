@@ -43,11 +43,11 @@ func parseCommaSeparated(text string) (*ParsedData, error) {
 		GroupName: "Общие",
 	}
 	
-	// 1. Банк
-	data.BankName = strings.TrimSpace(parts[0])
+	// 1. Банк (автоматическая нормализация)
+	data.BankName = normalizeString(parts[0])
 	
-	// 2. Категория
-	data.Category = strings.TrimSpace(parts[1])
+	// 2. Категория (автоматическая нормализация)
+	data.Category = normalizeString(parts[1])
 	
 	// 3. Процент
 	percentStr := strings.TrimSpace(parts[2])
@@ -129,7 +129,7 @@ func parseFreeText(text string) (*ParsedData, error) {
 	textLower := strings.ToLower(text)
 	for _, bank := range banks {
 		if strings.Contains(textLower, strings.ToLower(bank)) {
-			data.BankName = bank
+			data.BankName = normalizeString(bank)
 			break
 		}
 	}
@@ -148,7 +148,7 @@ func parseFreeText(text string) (*ParsedData, error) {
 	
 	for _, cat := range categories {
 		if strings.Contains(textLower, strings.ToLower(cat)) {
-			data.Category = cat
+			data.Category = normalizeString(cat)
 			break
 		}
 	}
@@ -195,11 +195,21 @@ func parseFreeText(text string) (*ParsedData, error) {
 		}
 		
 		if len(categoryWords) > 0 {
-			data.Category = strings.Join(categoryWords, " ")
+			data.Category = normalizeString(strings.Join(categoryWords, " "))
 		}
 	}
 
 	return data, nil
+}
+
+// normalizeString нормализует строку: убирает лишние пробелы по краям и между словами
+func normalizeString(s string) string {
+	// Убираем пробелы по краям
+	s = strings.TrimSpace(s)
+	
+	// Убираем множественные пробелы между словами
+	words := strings.Fields(s)
+	return strings.Join(words, " ")
 }
 
 // parseMonth преобразует различные форматы месяца в YYYY-MM
