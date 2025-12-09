@@ -2,7 +2,7 @@ package bot
 
 // Version версия бота
 // Обновляйте при каждом значимом изменении
-const Version = "1.0.1"
+const Version = "1.0.2"
 
 // BuildInfo возвращает информацию о версии
 func BuildInfo() string {

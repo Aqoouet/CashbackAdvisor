@@ -19,7 +19,72 @@ type ParsedData struct {
 }
 
 // ParseMessage пытается извлечь данные из сообщения пользователя
+// Поддерживает два формата:
+// 1. Через запятую: "Банк, Категория, Процент, Сумма, Месяц"
+// 2. Свободный текст (старый формат)
 func ParseMessage(text string) (*ParsedData, error) {
+	data := &ParsedData{}
+	
+	// Проверяем, есть ли запятые - значит используется новый формат
+	if strings.Contains(text, ",") {
+		return parseCommaSeparated(text)
+	}
+	
+	// Старый формат - парсим свободный текст
+	return parseFreeText(text)
+}
+
+// parseCommaSeparated парсит данные в формате: "Банк, Категория, Процент, Сумма, Месяц"
+func parseCommaSeparated(text string) (*ParsedData, error) {
+	parts := strings.Split(text, ",")
+	if len(parts) < 5 {
+		return nil, fmt.Errorf("неверный формат. Используйте: Банк, Категория, Процент, Сумма, Месяц")
+	}
+	
+	data := &ParsedData{
+		GroupName: "Общие",
+	}
+	
+	// 1. Банк
+	data.BankName = strings.TrimSpace(parts[0])
+	
+	// 2. Категория
+	data.Category = strings.TrimSpace(parts[1])
+	
+	// 3. Процент
+	percentStr := strings.TrimSpace(parts[2])
+	percentStr = strings.ReplaceAll(percentStr, "%", "")
+	percentStr = strings.TrimSpace(percentStr)
+	if percent, err := strconv.ParseFloat(percentStr, 64); err == nil {
+		data.CashbackPercent = percent
+	} else {
+		return nil, fmt.Errorf("неверный формат процента: %s", parts[2])
+	}
+	
+	// 4. Сумма
+	amountStr := strings.TrimSpace(parts[3])
+	amountStr = strings.ReplaceAll(amountStr, "р", "")
+	amountStr = strings.ReplaceAll(amountStr, "₽", "")
+	amountStr = strings.ReplaceAll(amountStr, " ", "")
+	if amount, err := strconv.ParseFloat(amountStr, 64); err == nil {
+		data.MaxAmount = amount
+	} else {
+		return nil, fmt.Errorf("неверный формат суммы: %s", parts[3])
+	}
+	
+	// 5. Месяц
+	monthStr := strings.TrimSpace(parts[4])
+	if monthYear, err := parseMonth(monthStr); err == nil {
+		data.MonthYear = monthYear
+	} else {
+		return nil, fmt.Errorf("неверный формат месяца: %s", parts[4])
+	}
+	
+	return data, nil
+}
+
+// parseFreeText парсит данные из свободного текста (старый формат)
+func parseFreeText(text string) (*ParsedData, error) {
 	data := &ParsedData{}
 	errors := []string{}
 
