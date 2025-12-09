@@ -214,8 +214,8 @@ func (h *Handler) RegisterRoutes(r chi.Router) {
 	r.Route("/groups", func(r chi.Router) {
 		r.Post("/", h.CreateGroup)
 		r.Get("/", h.GetAllGroups)
-		r.Get("/{groupName}", h.GetGroup)
-		r.Get("/{groupName}/members", h.GetGroupMembers)
+		r.Get("/check", h.GetGroup)      // ?name=groupName
+		r.Get("/members", h.GetGroupMembers) // ?name=groupName
 	})
 
 	// Пользователи и группы
@@ -273,7 +273,11 @@ func (h *Handler) GetAllGroups(w http.ResponseWriter, r *http.Request) {
 
 // GetGroup проверяет существование группы
 func (h *Handler) GetGroup(w http.ResponseWriter, r *http.Request) {
-	groupName := chi.URLParam(r, "groupName")
+	groupName := r.URL.Query().Get("name")
+	if groupName == "" {
+		respondError(w, http.StatusBadRequest, "Укажите параметр name")
+		return
+	}
 	
 	exists, err := h.service.GroupExists(r.Context(), groupName)
 	if err != nil {
@@ -294,7 +298,11 @@ func (h *Handler) GetGroup(w http.ResponseWriter, r *http.Request) {
 
 // GetGroupMembers возвращает участников группы
 func (h *Handler) GetGroupMembers(w http.ResponseWriter, r *http.Request) {
-	groupName := chi.URLParam(r, "groupName")
+	groupName := r.URL.Query().Get("name")
+	if groupName == "" {
+		respondError(w, http.StatusBadRequest, "Укажите параметр name")
+		return
+	}
 	
 	members, err := h.service.GetGroupMembers(r.Context(), groupName)
 	if err != nil {

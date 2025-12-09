@@ -419,7 +419,9 @@ func (c *APIClient) JoinGroup(userID, groupName string) error {
 
 // GroupExists проверяет существование группы
 func (c *APIClient) GroupExists(groupName string) bool {
-	url := fmt.Sprintf("%s/api/v1/groups/%s", c.baseURL, groupName)
+	params := url.Values{}
+	params.Add("name", groupName)
+	url := fmt.Sprintf("%s/api/v1/groups/check?%s", c.baseURL, params.Encode())
 	
 	resp, err := c.httpClient.Get(url)
 	if err != nil {
@@ -457,7 +459,9 @@ func (c *APIClient) GetAllGroups() ([]string, error) {
 
 // GetGroupMembers возвращает участников группы
 func (c *APIClient) GetGroupMembers(groupName string) ([]string, error) {
-	url := fmt.Sprintf("%s/api/v1/groups/%s/members", c.baseURL, groupName)
+	params := url.Values{}
+	params.Add("name", groupName)
+	url := fmt.Sprintf("%s/api/v1/groups/members?%s", c.baseURL, params.Encode())
 	
 	resp, err := c.httpClient.Get(url)
 	if err != nil {
