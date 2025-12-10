@@ -1,6 +1,7 @@
 package bot
 
 import (
+	"math"
 	"strings"
 )
 
@@ -63,24 +64,34 @@ func min(a, b, c int) int {
 	return c
 }
 
-// findSimilarCategory находит наиболее похожую категорию
-func findSimilarCategory(input string, categories []string) (string, int) {
+// findSimilarCategory находит наиболее похожую категорию и возвращает саму категорию,
+// процент похожести и усреднённое расстояние Левенштейна. Порядок слов не важен:
+// для каждого слова запроса берётся лучшее совпадение среди слов категории, затем
+// считаем среднее по словам запроса.
+func findSimilarCategory(input string, categories []string) (string, float64, int) {
 	if len(categories) == 0 {
-		return "", -1
+		return "", 0, -1
+	}
+
+	normalizedInput := strings.ToLower(strings.TrimSpace(input))
+	inputWords := filterWords(normalizedInput)
+	if len(inputWords) == 0 {
+		inputWords = []string{normalizedInput}
 	}
 
 	bestMatch := categories[0]
-	bestDistance := levenshteinDistance(input, categories[0])
+	bestSim, bestDistance := scoreCategory(inputWords, categories[0])
 
 	for _, cat := range categories[1:] {
-		distance := levenshteinDistance(input, cat)
-		if distance < bestDistance {
-			bestDistance = distance
+		sim, dist := scoreCategory(inputWords, cat)
+		if sim > bestSim || (sim == bestSim && dist < bestDistance) {
+			bestSim = sim
+			bestDistance = dist
 			bestMatch = cat
 		}
 	}
 
-	return bestMatch, bestDistance
+	return bestMatch, bestSim, bestDistance
 }
 
 // similarity вычисляет коэффициент похожести (0-100)
@@ -100,5 +111,68 @@ func max(a, b int) int {
 		return a
 	}
 	return b
+}
+
+// filterWords разбивает строку на слова, убирая короткие служебные слова
+func filterWords(s string) []string {
+	parts := strings.FieldsFunc(s, func(r rune) bool {
+		return !(r >= 'a' && r <= 'z') &&
+			!(r >= 'A' && r <= 'Z') &&
+			!(r >= 'а' && r <= 'я') &&
+			!(r >= 'А' && r <= 'Я') &&
+			r != 'ё' && r != 'Ё'
+	})
+
+	stop := map[string]bool{
+		"в": true, "во": true, "на": true, "и": true, "для": true, "из": true,
+		"к": true, "по": true, "с": true, "со": true, "от": true, "до": true,
+		"у": true, "за": true, "над": true, "под": true, "при": true,
+		"город": true, "городе": true, "городом": true,
+	}
+
+	var res []string
+	for _, p := range parts {
+		if len(p) < 2 {
+			continue
+		}
+		if stop[p] {
+			continue
+		}
+		res = append(res, p)
+	}
+	return res
+}
+
+// scoreCategory считает похожесть категории: порядок слов не важен, берём
+// для каждого слова запроса лучшее совпадение по словам категории и усредняем.
+func scoreCategory(inputWords []string, category string) (float64, int) {
+	catLower := strings.ToLower(category)
+	catWords := filterWords(catLower)
+	if len(catWords) == 0 {
+		catWords = []string{catLower}
+	}
+
+	totalSim := 0.0
+	totalDist := 0
+
+	for _, iw := range inputWords {
+		bestSim := 0.0
+		bestDist := len(iw) + len(catLower) // заведомо худшее
+		for _, cw := range catWords {
+			s := similarity(iw, cw)
+			d := levenshteinDistance(iw, cw)
+			if s > bestSim || (s == bestSim && d < bestDist) {
+				bestSim = s
+				bestDist = d
+			}
+		}
+		totalSim += bestSim
+		totalDist += bestDist
+	}
+
+	avgSim := totalSim / float64(len(inputWords))
+	avgDist := int(math.Round(float64(totalDist) / float64(len(inputWords))))
+
+	return avgSim, avgDist
 }
 
