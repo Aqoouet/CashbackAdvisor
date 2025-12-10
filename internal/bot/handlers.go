@@ -736,7 +736,8 @@ func (b *Bot) handleBestQueryByCategoryWithCorrection(message *tgbotapi.Message,
 				log.Printf("📋 Список категорий: %v", categories)
 			}
 			if err2 == nil && len(categories) > 0 {
-				similar, simPercent, distance := findSimilarCategory(category, categories)
+				similar, distance := findSimilarCategory(category, categories)
+				simPercent := similarity(category, similar)
 				
 				log.Printf("🔍 Сравнение: '%s' → '%s' (расстояние: %d, похожесть: %.1f%%)", 
 					category, similar, distance, simPercent)
