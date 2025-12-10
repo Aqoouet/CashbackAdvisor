@@ -29,7 +29,8 @@ func FindSimilarBank(input string) (string, bool) {
 		return "", false
 	}
 
-	similar, simPercent, _ := findSimilarCategory(input, KnownBanks)
+	similar, _ := findSimilarCategory(input, KnownBanks)
+	simPercent := similarity(input, similar)
 
 	// Если похожесть > 60% - предлагаем исправление
 	if simPercent > 60.0 {
