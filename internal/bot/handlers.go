@@ -6,7 +6,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-	"unicode/utf8"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"github.com/rymax1e/open-cashback-advisor/internal/models"
@@ -768,19 +767,17 @@ func (b *Bot) handleBestQueryByCategoryWithCorrection(message *tgbotapi.Message,
 					return
 				}
 
-				// Мягкий порог: если похожесть > 50% и расстояние небольшое по рунам,
+				// Мягкий порог: если похожесть 40-60% и расстояние небольшое,
 				// всё же предлагаем как слабое предположение.
-				runeLen := utf8.RuneCountInString(category)
-				distanceLimit := max(runeLen/3, 3)
-				if simPercent > 50.0 && distance <= distanceLimit {
+				if simPercent > 40.0 && distance <= max(len(category)/2, 4) {
 					text := fmt.Sprintf("❌ Категория не найдена\n\n"+
 						"📁 Вы написали: \"%s\"\n"+
 						"💡 Может быть: \"%s\"?\n\n"+
 						"❓ Попробовать с этим вариантом?", 
 						category, similar)
 
-					log.Printf("⚠️ Слабое предположение: '%s' → '%s' (расстояние: %d <= %d, похожесть: %.1f%%)",
-						category, similar, distance, distanceLimit, simPercent)
+					log.Printf("⚠️ Слабое предположение: '%s' → '%s' (расстояние: %d, похожесть: %.1f%%)",
+						category, similar, distance, simPercent)
 
 					b.userStates[message.From.ID] = &UserState{
 						State: "awaiting_category_correction",
