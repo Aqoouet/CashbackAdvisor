@@ -736,8 +736,12 @@ func (b *Bot) handleBestQueryByCategoryWithCorrection(message *tgbotapi.Message,
 			if len(categories) > 0 {
 				log.Printf("📋 Список категорий: %v", categories)
 			}
-			if err2 == nil && len(categories) > 0 {
-				similar, simPercent, distance := findSimilarCategory(category, categories)
+
+			// Дополняем базовым справочником, если в группе подходящего варианта нет
+			combined := mergeCategories(categories, BaseCategories)
+
+			if err2 == nil && len(combined) > 0 {
+				similar, simPercent, distance := findSimilarCategory(category, combined)
 				
 				log.Printf("🔍 Сравнение: '%s' → '%s' (расстояние: %d, похожесть: %.1f%%)", 
 					category, similar, distance, simPercent)
@@ -772,7 +776,8 @@ func (b *Bot) handleBestQueryByCategoryWithCorrection(message *tgbotapi.Message,
 				// всё же предлагаем как слабое предположение.
 				runeLen := utf8.RuneCountInString(category)
 				distanceLimit := max(runeLen/3, 3)
-				if simPercent > 50.0 && distance <= distanceLimit {
+				if (simPercent > 50.0 && distance <= distanceLimit) ||
+					(distance <= 2 && simPercent > 40.0) { // 1-2 буквы отличия
 					text := fmt.Sprintf("❌ Категория не найдена\n\n"+
 						"📁 Вы написали: \"%s\"\n"+
 						"💡 Может быть: \"%s\"?\n\n"+
@@ -831,6 +836,22 @@ func (b *Bot) handleBestQueryByCategoryWithCorrection(message *tgbotapi.Message,
 	)
 
 	b.sendMessage(message.Chat.ID, text)
+}
+
+// mergeCategories объединяет категории из группы и базового справочника, удаляя дубликаты (без учета регистра).
+func mergeCategories(group []string, base []string) []string {
+	seen := make(map[string]bool)
+	var result []string
+
+	for _, c := range append(group, base...) {
+		key := strings.ToLower(strings.TrimSpace(c))
+		if key == "" || seen[key] {
+			continue
+		}
+		seen[key] = true
+		result = append(result, c)
+	}
+	return result
 }
 
 // handleBestQuery обрабатывает текстовый запрос на поиск лучшего кэшбэка
