@@ -1124,10 +1124,45 @@ func (b *Bot) handleCallback(callback *tgbotapi.CallbackQuery) {
 	b.api.Send(tgbotapi.NewCallback(callback.ID, ""))
 }
 
+// defaultCommandButtons возвращает популярные команды для быстрого доступа
+func defaultCommandButtons() [][]string {
+	return [][]string{
+		{"/help", "/list"},
+		{"/update", "/groupinfo"},
+	}
+}
+
+// buildKeyboard формирует клавиатуру с учётом переданных и дефолтных кнопок
+func buildKeyboard(buttons [][]string) [][]tgbotapi.KeyboardButton {
+	var keyboard [][]tgbotapi.KeyboardButton
+
+	// Основные кнопки (если переданы)
+	for _, row := range buttons {
+		var keyboardRow []tgbotapi.KeyboardButton
+		for _, btn := range row {
+			keyboardRow = append(keyboardRow, tgbotapi.NewKeyboardButton(btn))
+		}
+		keyboard = append(keyboard, keyboardRow)
+	}
+
+	// Популярные команды всегда добавляем последними
+	for _, row := range defaultCommandButtons() {
+		var keyboardRow []tgbotapi.KeyboardButton
+		for _, btn := range row {
+			keyboardRow = append(keyboardRow, tgbotapi.NewKeyboardButton(btn))
+		}
+		keyboard = append(keyboard, keyboardRow)
+	}
+
+	return keyboard
+}
+
 // sendMessage отправляет текстовое сообщение
 func (b *Bot) sendMessage(chatID int64, text string) {
 	msg := tgbotapi.NewMessage(chatID, text)
 	msg.ParseMode = "HTML"
+	msg.ReplyMarkup = tgbotapi.NewReplyKeyboard(buildKeyboard(nil)...)
+	msg.ReplyMarkup.(*tgbotapi.ReplyKeyboardMarkup).ResizeKeyboard = true
 	if _, err := b.api.Send(msg); err != nil {
 		log.Printf("❌ Ошибка отправки сообщения: %v", err)
 	}
@@ -1324,16 +1359,10 @@ func (b *Bot) handleDeleteConfirmation(message *tgbotapi.Message, state *UserSta
 func (b *Bot) sendMessageWithButtons(chatID int64, text string, buttons [][]string) {
 	msg := tgbotapi.NewMessage(chatID, text)
 	
-	var keyboard [][]tgbotapi.KeyboardButton
-	for _, row := range buttons {
-		var keyboardRow []tgbotapi.KeyboardButton
-		for _, btn := range row {
-			keyboardRow = append(keyboardRow, tgbotapi.NewKeyboardButton(btn))
-		}
-		keyboard = append(keyboard, keyboardRow)
-	}
-	
-	msg.ReplyMarkup = tgbotapi.NewReplyKeyboard(keyboard...)
+	keyboard := buildKeyboard(buttons)
+	kb := tgbotapi.NewReplyKeyboard(keyboard...)
+	kb.ResizeKeyboard = true
+	msg.ReplyMarkup = kb
 	
 	if _, err := b.api.Send(msg); err != nil {
 		log.Printf("❌ Ошибка отправки сообщения: %v", err)
