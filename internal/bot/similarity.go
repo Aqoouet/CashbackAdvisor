@@ -63,24 +63,60 @@ func min(a, b, c int) int {
 	return c
 }
 
-// findSimilarCategory находит наиболее похожую категорию
-func findSimilarCategory(input string, categories []string) (string, int) {
+// findSimilarCategory находит наиболее похожую категорию и возвращает саму категорию,
+// процент похожести и расстояние Левенштейна. Мы оцениваем похожесть как по полной
+// строке, так и по ключевым словам внутри категории, чтобы лучше ловить опечатки
+// в коротких словах («Таксу» -> «Такси»), а также когда в запросе есть служебные
+// слова («в городе» и т.п.).
+func findSimilarCategory(input string, categories []string) (string, float64, int) {
 	if len(categories) == 0 {
-		return "", -1
+		return "", 0, -1
+	}
+
+	normalizedInput := strings.ToLower(strings.TrimSpace(input))
+	inputWords := filterWords(normalizedInput)
+	mainInputWord := ""
+	if len(inputWords) > 0 {
+		mainInputWord = inputWords[0]
 	}
 
 	bestMatch := categories[0]
-	bestDistance := levenshteinDistance(input, categories[0])
+	bestDistance := levenshteinDistance(normalizedInput, strings.ToLower(categories[0]))
+	bestSim := similarity(normalizedInput, strings.ToLower(categories[0]))
 
-	for _, cat := range categories[1:] {
-		distance := levenshteinDistance(input, cat)
-		if distance < bestDistance {
-			bestDistance = distance
+	updateBest := func(cat string, dist int, sim float64) {
+		if sim > bestSim || (sim == bestSim && dist < bestDistance) {
+			bestSim = sim
+			bestDistance = dist
 			bestMatch = cat
 		}
 	}
 
-	return bestMatch, bestDistance
+	for _, cat := range categories[1:] {
+		catLower := strings.ToLower(cat)
+
+		// Похожесть по полной строке
+		distFull := levenshteinDistance(normalizedInput, catLower)
+		simFull := similarity(normalizedInput, catLower)
+		updateBest(cat, distFull, simFull)
+
+		// Похожесть по ключевым словам категории
+		catWords := filterWords(catLower)
+		for _, w := range catWords {
+			simWord := similarity(normalizedInput, w)
+			distWord := levenshteinDistance(normalizedInput, w)
+			updateBest(cat, distWord, simWord)
+
+			// Если есть главное слово в запросе, сравним его с словами категории
+			if mainInputWord != "" {
+				simMain := similarity(mainInputWord, w)
+				distMain := levenshteinDistance(mainInputWord, w)
+				updateBest(cat, distMain, simMain)
+			}
+		}
+	}
+
+	return bestMatch, bestSim, bestDistance
 }
 
 // similarity вычисляет коэффициент похожести (0-100)
@@ -100,5 +136,35 @@ func max(a, b int) int {
 		return a
 	}
 	return b
+}
+
+// filterWords разбивает строку на слова, убирая короткие служебные слова
+func filterWords(s string) []string {
+	parts := strings.FieldsFunc(s, func(r rune) bool {
+		return !(r >= 'a' && r <= 'z') &&
+			!(r >= 'A' && r <= 'Z') &&
+			!(r >= 'а' && r <= 'я') &&
+			!(r >= 'А' && r <= 'Я') &&
+			r != 'ё' && r != 'Ё'
+	})
+
+	stop := map[string]bool{
+		"в": true, "во": true, "на": true, "и": true, "для": true, "из": true,
+		"к": true, "по": true, "с": true, "со": true, "от": true, "до": true,
+		"у": true, "за": true, "над": true, "под": true, "при": true,
+		"город": true, "городе": true, "городом": true,
+	}
+
+	var res []string
+	for _, p := range parts {
+		if len(p) < 2 {
+			continue
+		}
+		if stop[p] {
+			continue
+		}
+		res = append(res, p)
+	}
+	return res
 }
 
