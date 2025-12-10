@@ -120,6 +120,9 @@ func (b *Bot) handleMessage(message *tgbotapi.Message) {
 		case "awaiting_bank_correction":
 			b.handleBankCorrection(message, state)
 			return
+		case "awaiting_category_correction":
+			b.handleCategoryCorrection(message, state)
+			return
 		case "awaiting_update_data":
 			b.handleUpdateData(message, state)
 			return
@@ -376,6 +379,29 @@ func (b *Bot) handleBankCorrection(message *tgbotapi.Message, state *UserState) 
 		// Для простоты просто завершим - пользователь может отправить заново
 		delete(b.userStates, message.From.ID)
 		b.sendMessage(message.Chat.ID, "Отправьте данные заново, если хотите продолжить.")
+	}
+}
+
+// handleCategoryCorrection обрабатывает подтверждение исправления категории при поиске
+func (b *Bot) handleCategoryCorrection(message *tgbotapi.Message, state *UserState) {
+	text := strings.ToLower(strings.TrimSpace(message.Text))
+	
+	if strings.Contains(text, "да") || strings.Contains(text, "исправить") || text == "✅ да, исправить" {
+		// Используем исправленную категорию
+		correctedCategory := state.Data.Category
+		log.Printf("✅ Пользователь подтвердил исправление категории: %s", correctedCategory)
+		
+		// Удаляем состояние
+		delete(b.userStates, message.From.ID)
+		
+		// Выполняем поиск с исправленной категорией, пропуская предложения
+		b.handleBestQueryByCategoryWithCorrection(message, correctedCategory, true)
+	} else {
+		// Пользователь отклонил исправление
+		log.Printf("❌ Пользователь отклонил исправление категории")
+		
+		delete(b.userStates, message.From.ID)
+		b.sendMessage(message.Chat.ID, "Хорошо, попробуйте ввести название категории по-другому.")
 	}
 }
 
@@ -675,8 +701,11 @@ func (b *Bot) isBestCashbackQuery(text string) bool {
 // handleBestQueryByCategory обрабатывает запрос на поиск лучшего кэшбэка по категории
 // Всё сообщение = категория, месяц = текущий по умолчанию
 func (b *Bot) handleBestQueryByCategory(message *tgbotapi.Message) {
-	category := normalizeString(message.Text)
-	
+	b.handleBestQueryByCategoryWithCorrection(message, normalizeString(message.Text), false)
+}
+
+// handleBestQueryByCategoryWithCorrection обрабатывает поиск с возможностью исправления
+func (b *Bot) handleBestQueryByCategoryWithCorrection(message *tgbotapi.Message, category string, skipSuggestion bool) {
 	if category == "" {
 		b.sendMessage(message.Chat.ID, "❌ Укажите категорию. Например: \"Такси\"")
 		return
@@ -699,22 +728,38 @@ func (b *Bot) handleBestQueryByCategory(message *tgbotapi.Message) {
 	// Вызываем API для поиска лучшего кэшбэка
 	rule, err := b.client.GetBestCashback(groupName, category, monthYear)
 	if err != nil {
-		// Пытаемся найти похожие категории
-		categories, err2 := b.client.ListAllCategories(groupName, monthYear)
-		if err2 == nil && len(categories) > 0 {
-			similar, distance := findSimilarCategory(category, categories)
-			simPercent := similarity(category, similar)
-			
-			// Если нашли похожую категорию (похожесть > 60%)
-			if simPercent > 60.0 {
-				b.sendMessage(message.Chat.ID, fmt.Sprintf("❌ Категория не найдена\n\n"+
-					"📁 Вы написали: \"%s\"\n"+
-					"💡 Возможно, вы имели в виду: \"%s\"\n\n"+
-					"Попробуйте ещё раз с правильным названием!", 
-					category, similar))
-				log.Printf("🔍 Поиск похожей категории: '%s' → '%s' (расстояние: %d, похожесть: %.1f%%)",
-					category, similar, distance, simPercent)
-				return
+		// Пытаемся найти похожие категории только если не пропускаем предложения
+		if !skipSuggestion {
+			categories, err2 := b.client.ListAllCategories(groupName, monthYear)
+			if err2 == nil && len(categories) > 0 {
+				similar, distance := findSimilarCategory(category, categories)
+				simPercent := similarity(category, similar)
+				
+				// Если нашли похожую категорию (похожесть > 60%)
+				if simPercent > 60.0 {
+					text := fmt.Sprintf("❌ Категория не найдена\n\n"+
+						"📁 Вы написали: \"%s\"\n"+
+						"💡 Возможно, вы имели в виду: \"%s\"\n\n"+
+						"❓ Искать с исправленным названием?", 
+						category, similar)
+					
+					log.Printf("🔍 Поиск похожей категории: '%s' → '%s' (расстояние: %d, похожесть: %.1f%%)",
+						category, similar, distance, simPercent)
+					
+					// Сохраняем состояние с исправленной категорией
+					b.userStates[message.From.ID] = &UserState{
+						State: "awaiting_category_correction",
+						Data: &ParsedData{
+							Category: similar,
+						},
+					}
+					
+					// Отправляем с кнопками
+					b.sendMessageWithButtons(message.Chat.ID, text, [][]string{
+						{"✅ Да, исправить", "❌ Нет, оставить как есть"},
+					})
+					return
+				}
 			}
 		}
 		
