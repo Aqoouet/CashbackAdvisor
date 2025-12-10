@@ -850,19 +850,23 @@ func (b *Bot) handleJoinGroup(message *tgbotapi.Message) {
 	groupName := strings.Join(args[1:], " ")
 	userIDStr := strconv.FormatInt(message.From.ID, 10)
 
-	// Проверяем, не состоит ли пользователь уже в группе
-	if currentGroup, err := b.client.GetUserGroup(userIDStr); err == nil {
-		b.sendMessage(message.Chat.ID, fmt.Sprintf("⚠️ Вы уже состоите в группе \"%s\"", currentGroup))
-		return
-	}
-
 	// Проверяем существование группы
 	if !b.client.GroupExists(groupName) {
 		b.sendMessage(message.Chat.ID, fmt.Sprintf("❌ Группа \"%s\" не существует.\n\nСоздайте её: /creategroup %s", groupName, groupName))
 		return
 	}
 
-	// Присоединяемся к группе
+	// Проверяем, не состоит ли пользователь уже в этой же группе
+	if currentGroup, err := b.client.GetUserGroup(userIDStr); err == nil {
+		if currentGroup == groupName {
+			b.sendMessage(message.Chat.ID, fmt.Sprintf("⚠️ Вы уже состоите в группе \"%s\"", currentGroup))
+			return
+		}
+		// Пользователь переключается из одной группы в другую
+		log.Printf("👥 Пользователь @%s переключается из группы \"%s\" в группу \"%s\"", message.From.UserName, currentGroup, groupName)
+	}
+
+	// Присоединяемся к группе (или переключаемся)
 	err := b.client.JoinGroup(userIDStr, groupName)
 	if err != nil {
 		b.sendMessage(message.Chat.ID, fmt.Sprintf("❌ Ошибка: %s", err))
