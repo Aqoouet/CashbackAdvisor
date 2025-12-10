@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"github.com/rymax1e/open-cashback-advisor/internal/models"
@@ -610,6 +611,13 @@ func (b *Bot) handleList(message *tgbotapi.Message) {
 		return
 	}
 
+	// Логируем для диагностики: какие категории есть в группе
+	cats := make([]string, 0, len(list.Rules))
+	for _, r := range list.Rules {
+		cats = append(cats, r.Category)
+	}
+	log.Printf("📋 /list group=\"%s\" total=%d categories=%v", groupName, list.Total, cats)
+
 	if len(list.Rules) == 0 {
 		b.sendMessage(message.Chat.ID, "📝 Пока нет % кешбека в группе.\n\nДобавьте первым!")
 		return
@@ -735,14 +743,17 @@ func (b *Bot) handleBestQueryByCategoryWithCorrection(message *tgbotapi.Message,
 			if len(categories) > 0 {
 				log.Printf("📋 Список категорий: %v", categories)
 			}
-			if err2 == nil && len(categories) > 0 {
-				similar, distance := findSimilarCategory(category, categories)
-				simPercent := similarity(category, similar)
+
+			// Дополняем базовым справочником, если в группе подходящего варианта нет
+			combined := mergeCategories(categories, BaseCategories)
+
+			if err2 == nil && len(combined) > 0 {
+				similar, simPercent, distance := findSimilarCategory(category, combined)
 				
 				log.Printf("🔍 Сравнение: '%s' → '%s' (расстояние: %d, похожесть: %.1f%%)", 
 					category, similar, distance, simPercent)
 				
-				// Если нашли похожую категорию (похожесть > 60%)
+				// Порог для уверенного совпадения
 				if simPercent > 60.0 {
 					text := fmt.Sprintf("❌ Категория не найдена\n\n"+
 						"📁 Вы написали: \"%s\"\n"+
@@ -766,8 +777,39 @@ func (b *Bot) handleBestQueryByCategoryWithCorrection(message *tgbotapi.Message,
 						{"✅ Да, исправить", "❌ Нет, оставить как есть"},
 					})
 					return
-				} else {
-					log.Printf("❌ Похожесть слишком низкая (%.1f%% <= 60%%), не предлагаю исправление", simPercent)
+				}
+
+				// Мягкий порог: если похожесть > 50% и расстояние небольшое по рунам,
+				// всё же предлагаем как слабое предположение.
+				runeLen := utf8.RuneCountInString(category)
+				distanceLimit := max(runeLen/3, 3)
+				if (simPercent > 50.0 && distance <= distanceLimit) ||
+					(distance <= 2 && simPercent > 40.0) { // 1-2 буквы отличия
+					text := fmt.Sprintf("❌ Категория не найдена\n\n"+
+						"📁 Вы написали: \"%s\"\n"+
+						"💡 Может быть: \"%s\"?\n\n"+
+						"❓ Попробовать с этим вариантом?", 
+						category, similar)
+
+					log.Printf("⚠️ Слабое предположение: '%s' → '%s' (расстояние: %d <= %d, похожесть: %.1f%%)",
+						category, similar, distance, distanceLimit, simPercent)
+
+					b.userStates[message.From.ID] = &UserState{
+						State: "awaiting_category_correction",
+						Data: &ParsedData{
+							Category: similar,
+						},
+					}
+
+					b.sendMessageWithButtons(message.Chat.ID, text, [][]string{
+						{"✅ Да, исправить", "❌ Нет, оставить как есть"},
+					})
+					return
+				}
+
+				log.Printf("❌ Похожесть слишком низкая (%.1f%%), не предлагаю исправление", simPercent)
+				if len(categories) > 0 {
+					log.Printf("ℹ️ Лучшая найденная категория: '%s' (distance=%d, sim=%.1f%%)", similar, distance, simPercent)
 				}
 			} else {
 				log.Printf("⚠️ Не удалось получить категории для поиска похожих (кол-во: %d, ошибка: %v)", len(categories), err2)
@@ -801,6 +843,22 @@ func (b *Bot) handleBestQueryByCategoryWithCorrection(message *tgbotapi.Message,
 	)
 
 	b.sendMessage(message.Chat.ID, text)
+}
+
+// mergeCategories объединяет категории из группы и базового справочника, удаляя дубликаты (без учета регистра).
+func mergeCategories(group []string, base []string) []string {
+	seen := make(map[string]bool)
+	var result []string
+
+	for _, c := range append(group, base...) {
+		key := strings.ToLower(strings.TrimSpace(c))
+		if key == "" || seen[key] {
+			continue
+		}
+		seen[key] = true
+		result = append(result, c)
+	}
+	return result
 }
 
 // handleBestQuery обрабатывает текстовый запрос на поиск лучшего кэшбэка
