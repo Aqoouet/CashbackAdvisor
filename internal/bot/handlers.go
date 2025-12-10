@@ -1161,8 +1161,9 @@ func buildKeyboard(buttons [][]string) [][]tgbotapi.KeyboardButton {
 func (b *Bot) sendMessage(chatID int64, text string) {
 	msg := tgbotapi.NewMessage(chatID, text)
 	msg.ParseMode = "HTML"
-	msg.ReplyMarkup = tgbotapi.NewReplyKeyboard(buildKeyboard(nil)...)
-	msg.ReplyMarkup.(*tgbotapi.ReplyKeyboardMarkup).ResizeKeyboard = true
+	kb := tgbotapi.NewReplyKeyboard(buildKeyboard(nil)...)
+	kb.ResizeKeyboard = true
+	msg.ReplyMarkup = kb
 	if _, err := b.api.Send(msg); err != nil {
 		log.Printf("❌ Ошибка отправки сообщения: %v", err)
 	}
