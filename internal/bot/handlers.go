@@ -3,6 +3,7 @@ package bot
 import (
 	"fmt"
 	"log"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -744,6 +745,48 @@ func (b *Bot) handleBestQueryByCategoryWithCorrection(message *tgbotapi.Message,
 			}
 
 			if err2 == nil && len(categories) > 0 {
+				normalizedCategory := strings.ToLower(strings.TrimSpace(category))
+				inputWords := filterWords(normalizedCategory)
+				if len(inputWords) == 0 {
+					inputWords = []string{normalizedCategory}
+				}
+				hasExact := false
+				for _, cat := range categories {
+					if strings.EqualFold(strings.TrimSpace(cat), normalizedCategory) {
+						hasExact = true
+						break
+					}
+				}
+				log.Printf("ℹ️ Нормализованная категория запроса: '%s', точное совпадение в API: %v", normalizedCategory, hasExact)
+
+				type candidateScore struct {
+					name string
+					sim  float64
+					dist int
+				}
+				var scores []candidateScore
+				for _, cat := range categories {
+					sim, dist := scoreCategory(inputWords, cat)
+					scores = append(scores, candidateScore{name: cat, sim: sim, dist: dist})
+				}
+				sort.Slice(scores, func(i, j int) bool {
+					if scores[i].sim == scores[j].sim {
+						return scores[i].dist < scores[j].dist
+					}
+					return scores[i].sim > scores[j].sim
+				})
+				topN := 3
+				if len(scores) < topN {
+					topN = len(scores)
+				}
+				if topN > 0 {
+					log.Print("📊 Топ похожих категорий (sim%, dist):")
+					for i := 0; i < topN; i++ {
+						cs := scores[i]
+						log.Printf("   %d) '%s' → sim=%.1f%%, dist=%d", i+1, cs.name, cs.sim, cs.dist)
+					}
+				}
+
 				similar, simPercent, distance := findSimilarCategory(category, categories)
 				
 				log.Printf("🔍 Сравнение: '%s' → '%s' (расстояние: %d, похожесть: %.1f%%)", 
@@ -1107,7 +1150,7 @@ func (b *Bot) handleUpdateCommand(message *tgbotapi.Message) {
 	// Запрашиваем данные у API
 	rule, err := b.client.GetCashbackByID(id)
 	if err != nil {
-		b.sendMessage(message.Chat.ID, fmt.Sprintf("❌ % кешбек с ID %d не найден.", id))
+		b.sendMessage(message.Chat.ID, fmt.Sprintf("❌ %% кешбек с ID %d не найден.", id))
 		return
 	}
 
@@ -1223,7 +1266,7 @@ func (b *Bot) handleDeleteCommand(message *tgbotapi.Message) {
 	// Запрашиваем данные у API для проверки
 	rule, err := b.client.GetCashbackByID(id)
 	if err != nil {
-		b.sendMessage(message.Chat.ID, fmt.Sprintf("❌ % кешбек с ID %d не найден.", id))
+		b.sendMessage(message.Chat.ID, fmt.Sprintf("❌ %% кешбек с ID %d не найден.", id))
 		return
 	}
 
