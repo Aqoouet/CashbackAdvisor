@@ -6,7 +6,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-	"unicode/utf8"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"github.com/rymax1e/open-cashback-advisor/internal/models"
@@ -744,11 +743,9 @@ func (b *Bot) handleBestQueryByCategoryWithCorrection(message *tgbotapi.Message,
 				log.Printf("📋 Список категорий: %v", categories)
 			}
 
-			// Дополняем базовым справочником, если в группе подходящего варианта нет
-			combined := mergeCategories(categories, BaseCategories)
-
-			if err2 == nil && len(combined) > 0 {
-				similar, simPercent, distance := findSimilarCategory(category, combined)
+			if err2 == nil && len(categories) > 0 {
+				similar, distance := findSimilarCategory(category, categories)
+				simPercent := similarity(category, similar)
 				
 				log.Printf("🔍 Сравнение: '%s' → '%s' (расстояние: %d, похожесть: %.1f%%)", 
 					category, similar, distance, simPercent)
@@ -779,20 +776,17 @@ func (b *Bot) handleBestQueryByCategoryWithCorrection(message *tgbotapi.Message,
 					return
 				}
 
-				// Мягкий порог: если похожесть > 50% и расстояние небольшое по рунам,
+				// Мягкий порог: если похожесть 40-60% и расстояние небольшое,
 				// всё же предлагаем как слабое предположение.
-				runeLen := utf8.RuneCountInString(category)
-				distanceLimit := max(runeLen/3, 3)
-				if (simPercent > 50.0 && distance <= distanceLimit) ||
-					(distance <= 2 && simPercent > 40.0) { // 1-2 буквы отличия
+				if simPercent > 40.0 && distance <= max(len(category)/2, 4) {
 					text := fmt.Sprintf("❌ Категория не найдена\n\n"+
 						"📁 Вы написали: \"%s\"\n"+
 						"💡 Может быть: \"%s\"?\n\n"+
 						"❓ Попробовать с этим вариантом?", 
 						category, similar)
 
-					log.Printf("⚠️ Слабое предположение: '%s' → '%s' (расстояние: %d <= %d, похожесть: %.1f%%)",
-						category, similar, distance, distanceLimit, simPercent)
+					log.Printf("⚠️ Слабое предположение: '%s' → '%s' (расстояние: %d, похожесть: %.1f%%)",
+						category, similar, distance, simPercent)
 
 					b.userStates[message.From.ID] = &UserState{
 						State: "awaiting_category_correction",
@@ -845,21 +839,6 @@ func (b *Bot) handleBestQueryByCategoryWithCorrection(message *tgbotapi.Message,
 	b.sendMessage(message.Chat.ID, text)
 }
 
-// mergeCategories объединяет категории из группы и базового справочника, удаляя дубликаты (без учета регистра).
-func mergeCategories(group []string, base []string) []string {
-	seen := make(map[string]bool)
-	var result []string
-
-	for _, c := range append(group, base...) {
-		key := strings.ToLower(strings.TrimSpace(c))
-		if key == "" || seen[key] {
-			continue
-		}
-		seen[key] = true
-		result = append(result, c)
-	}
-	return result
-}
 
 // handleBestQuery обрабатывает текстовый запрос на поиск лучшего кэшбэка
 func (b *Bot) handleBestQuery(message *tgbotapi.Message) {
