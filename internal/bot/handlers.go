@@ -731,9 +731,16 @@ func (b *Bot) handleBestQueryByCategoryWithCorrection(message *tgbotapi.Message,
 		// Пытаемся найти похожие категории только если не пропускаем предложения
 		if !skipSuggestion {
 			categories, err2 := b.client.ListAllCategories(groupName, monthYear)
+			log.Printf("🔍 Получено категорий из API: %d, ошибка: %v", len(categories), err2)
+			if len(categories) > 0 {
+				log.Printf("📋 Список категорий: %v", categories)
+			}
 			if err2 == nil && len(categories) > 0 {
 				similar, distance := findSimilarCategory(category, categories)
 				simPercent := similarity(category, similar)
+				
+				log.Printf("🔍 Сравнение: '%s' → '%s' (расстояние: %d, похожесть: %.1f%%)", 
+					category, similar, distance, simPercent)
 				
 				// Если нашли похожую категорию (похожесть > 60%)
 				if simPercent > 60.0 {
@@ -743,7 +750,7 @@ func (b *Bot) handleBestQueryByCategoryWithCorrection(message *tgbotapi.Message,
 						"❓ Искать с исправленным названием?", 
 						category, similar)
 					
-					log.Printf("🔍 Поиск похожей категории: '%s' → '%s' (расстояние: %d, похожесть: %.1f%%)",
+					log.Printf("✅ Предлагаю исправление: '%s' → '%s' (расстояние: %d, похожесть: %.1f%%)",
 						category, similar, distance, simPercent)
 					
 					// Сохраняем состояние с исправленной категорией
@@ -759,7 +766,11 @@ func (b *Bot) handleBestQueryByCategoryWithCorrection(message *tgbotapi.Message,
 						{"✅ Да, исправить", "❌ Нет, оставить как есть"},
 					})
 					return
+				} else {
+					log.Printf("❌ Похожесть слишком низкая (%.1f%% <= 60%%), не предлагаю исправление", simPercent)
 				}
+			} else {
+				log.Printf("⚠️ Не удалось получить категории для поиска похожих (кол-во: %d, ошибка: %v)", len(categories), err2)
 			}
 		}
 		
