@@ -165,8 +165,10 @@ func (s *Service) DeleteCashback(ctx context.Context, id int64) error {
 // ListCashback получает список правил с пагинацией
 func (s *Service) ListCashback(ctx context.Context, req *models.ListCashbackRequest) (*models.ListCashbackResponse, error) {
 	// Установка значений по умолчанию
-	if req.Limit <= 0 || req.Limit > 100 {
+	if req.Limit <= 0 {
 		req.Limit = 20
+	} else if req.Limit > 1000 {
+		req.Limit = 1000
 	}
 	if req.Offset < 0 {
 		req.Offset = 0
