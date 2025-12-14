@@ -270,6 +270,18 @@ func (b *Bot) handleBankInfoNameInput(message *tgbotapi.Message) {
 		return
 	}
 	
+	// Валидация: название банка не должно быть пустым и не слишком коротким
+	if len(bankName) < 2 {
+		b.sendText(message.Chat.ID, "❌ Название банка слишком короткое. Введите корректное название или /cancel для отмены.")
+		return
+	}
+	
+	// Валидация: название не должно содержать только цифры
+	if isOnlyDigits(bankName) {
+		b.sendText(message.Chat.ID, "❌ Название банка не может состоять только из цифр. Введите корректное название или /cancel для отмены.")
+		return
+	}
+	
 	// Очищаем состояние
 	b.clearState(userID)
 	
@@ -284,11 +296,21 @@ func (b *Bot) handleBankInfoNameInput(message *tgbotapi.Message) {
 	// Получаем данные
 	rules, err := b.client.GetCashbackByBank(groupName, bankName)
 	if err != nil || len(rules) == 0 {
-		b.sendText(message.Chat.ID, fmt.Sprintf("❌ Кешбек для банка \"%s\" не найден в вашей группе.", bankName))
+		b.sendText(message.Chat.ID, fmt.Sprintf("❌ Кешбек для банка \"%s\" не найден в вашей группе.\n\nИспользуйте /banklist для просмотра всех банков.", bankName))
 		return
 	}
 	
 	b.sendText(message.Chat.ID, formatBankInfo(bankName, rules))
+}
+
+// isOnlyDigits проверяет, состоит ли строка только из цифр.
+func isOnlyDigits(s string) bool {
+	for _, c := range s {
+		if c < '0' || c > '9' {
+			return false
+		}
+	}
+	return true
 }
 
 // handleUpdateIDInput обрабатывает ввод ID для команды /update.

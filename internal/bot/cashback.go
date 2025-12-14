@@ -283,19 +283,23 @@ func (b *Bot) handleBestQueryWithCorrection(message *tgbotapi.Message, category 
 		return
 	}
 	
-	// Не нашли активные кешбеки - пробуем "Все покупки" как fallback
-	log.Printf("⚠️ Не найдено активных кешбеков для '%s' (err: %v), пробуем 'Все покупки'", category, err)
-	allPurchasesRules, errAll := b.getAllCashbacksByCategory(groupName, "Все покупки", monthYear)
-	if errAll == nil && len(allPurchasesRules) > 0 {
-		log.Printf("✅ Найдено %d кешбеков для 'Все покупки' как fallback", len(allPurchasesRules))
-		b.sendText(message.Chat.ID, formatAllCashbackResults(allPurchasesRules, category, true))
-		return
+	// Не нашли точную категорию - пробуем найти похожие (если не пропускаем)
+	log.Printf("⚠️ Не найдено активных кешбеков для '%s', ищу похожие категории", category)
+	if !skipSuggestion {
+		b.trySuggestSimilarCategory(message, category, groupName, monthYear)
+	} else {
+		// skipSuggestion=true означает, что уже была попытка с исправлением
+		// Пробуем "Все покупки" как последний вариант
+		log.Printf("⚠️ Уже была попытка исправления, пробуем 'Все покупки'")
+		allPurchasesRules, errAll := b.getAllCashbacksByCategory(groupName, "Все покупки", monthYear)
+		if errAll == nil && len(allPurchasesRules) > 0 {
+			log.Printf("✅ Найдено %d кешбеков для 'Все покупки' как fallback", len(allPurchasesRules))
+			b.sendText(message.Chat.ID, formatAllCashbackResults(allPurchasesRules, category, true))
+			return
+		}
+		log.Printf("❌ 'Все покупки' тоже не найдены, показываю 'не найдено'")
+		b.sendText(message.Chat.ID, formatNotFoundMessage(category, monthYear))
 	}
-	
-	// "Все покупки" тоже не найдены - показываем сообщение "не найдено"
-	// НЕ пробуем похожие категории, чтобы избежать бесконечного цикла
-	log.Printf("❌ 'Все покупки' тоже не найдены, показываю 'не найдено'")
-	b.sendText(message.Chat.ID, formatNotFoundMessage(category, monthYear))
 }
 
 // trySuggestSimilarCategory пытается найти похожую категорию.
