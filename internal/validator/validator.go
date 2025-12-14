@@ -39,7 +39,7 @@ func (e ValidationErrors) Strings() []string {
 	return messages
 }
 
-// ValidateMonthYear валидирует формат YYYY-MM и возвращает первый день месяца
+// ValidateMonthYear валидирует формат даты окончания дд.мм.гггг и возвращает дату
 func ValidateMonthYear(monthYear string) (time.Time, error) {
 	if monthYear == "" {
 		return time.Time{}, ValidationError{
@@ -48,24 +48,24 @@ func ValidateMonthYear(monthYear string) (time.Time, error) {
 		}
 	}
 
-	// Парсим дату в формате YYYY-MM
-	t, err := time.Parse("2006-01", monthYear)
-	if err != nil {
-		return time.Time{}, ValidationError{
-			Field:   "month_year",
-			Message: fmt.Sprintf("неверный формат, ожидается YYYY-MM (например, 2024-12), получено: %s", monthYear),
-		}
+	// Пробуем парсить формат дд.мм.гггг
+	t, err := time.Parse("02.01.2006", monthYear)
+	if err == nil {
+		return t, nil
 	}
 
-	// Проверяем, что месяц в диапазоне 1-12
-	if t.Month() < 1 || t.Month() > 12 {
-		return time.Time{}, ValidationError{
-			Field:   "month_year",
-			Message: fmt.Sprintf("месяц должен быть от 01 до 12, получено: %s", monthYear),
-		}
+	// Обратная совместимость: пробуем парсить старый формат YYYY-MM
+	t, err = time.Parse("2006-01", monthYear)
+	if err == nil {
+		// Конвертируем в последний день месяца
+		lastDay := time.Date(t.Year(), t.Month()+1, 0, 0, 0, 0, 0, time.UTC)
+		return lastDay, nil
 	}
 
-	return t, nil
+	return time.Time{}, ValidationError{
+		Field:   "month_year",
+		Message: fmt.Sprintf("неверный формат даты, ожидается дд.мм.гггг (например, 31.12.2024), получено: %s", monthYear),
+	}
 }
 
 // ValidateCashbackPercent валидирует процент кэшбэка

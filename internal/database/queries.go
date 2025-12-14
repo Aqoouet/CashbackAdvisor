@@ -44,7 +44,7 @@ const (
 			   cr.month_year, cr.cashback_percent, cr.max_amount, cr.created_at, cr.updated_at
 		FROM cashback_rules cr
 		INNER JOIN user_groups ug ON cr.user_id = ug.user_id
-		WHERE ug.group_name = $1 AND cr.category = $2 AND cr.month_year = $3
+		WHERE ug.group_name = $1 AND cr.category = $2 AND cr.month_year >= $3
 		ORDER BY cr.cashback_percent DESC, cr.max_amount DESC
 		LIMIT 1`
 

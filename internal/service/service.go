@@ -229,7 +229,7 @@ func (s *Service) normalizePagination(limit, offset int) (int, int) {
 	return limit, offset
 }
 
-// GetBestCashback получает правило с лучшим кэшбэком.
+// GetBestCashback получает правило с лучшим кэшбэком с fallback на "Все покупки".
 func (s *Service) GetBestCashback(ctx context.Context, req *models.BestCashbackRequest) (*models.CashbackRule, error) {
 	if err := validator.ValidateTextField("group_name", req.GroupName, true); err != nil {
 		return nil, err
@@ -243,7 +243,28 @@ func (s *Service) GetBestCashback(ctx context.Context, req *models.BestCashbackR
 		return nil, err
 	}
 
-	return s.repo.GetBestCashback(ctx, req.GroupName, req.Category, monthYear)
+	// Сначала ищем точное совпадение категории
+	categoryRule, err := s.repo.GetBestCashback(ctx, req.GroupName, req.Category, monthYear)
+	
+	// Ищем кэшбэк на "Все покупки"
+	allPurchasesRule, errAll := s.repo.GetBestCashback(ctx, req.GroupName, "Все покупки", monthYear)
+	
+	// Если нашли точную категорию
+	if err == nil {
+		// Если нашли "Все покупки" и он выгоднее
+		if errAll == nil && allPurchasesRule.CashbackPercent > categoryRule.CashbackPercent {
+			return allPurchasesRule, nil
+		}
+		return categoryRule, nil
+	}
+	
+	// Если не нашли точную категорию, возвращаем "Все покупки" (если есть)
+	if errAll == nil {
+		return allPurchasesRule, nil
+	}
+	
+	// Если ничего не нашли, возвращаем ошибку от первого запроса
+	return nil, err
 }
 
 // --- Методы для работы с группами ---

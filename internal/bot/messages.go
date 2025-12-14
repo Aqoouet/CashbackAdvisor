@@ -42,7 +42,7 @@ func FormatParsedData(data *ParsedData) string {
 		"📋 Распознанные данные:\n\n"+
 			"🏦 Банк: %s\n"+
 			"📁 Категория: %s\n"+
-			"📅 Месяц: %s\n"+
+			"📅 Действует до: %s\n"+
 			"💰 Кэшбэк: %.1f%%\n"+
 			"💵 Макс. сумма: %.0f₽",
 		data.BankName,
@@ -59,14 +59,14 @@ func formatCashbackRule(rule *models.CashbackRule) string {
 		"🆔 ID: %d\n"+
 			"🏦 Банк: %s\n"+
 			"📁 Категория: %s\n"+
-			"📅 Месяц: %s\n"+
+			"📅 Действует до: %s\n"+
 			"💰 Кэшбэк: %.1f%%\n"+
 			"💵 Макс. сумма: %.0f₽\n"+
 			"👤 Карта: %s",
 		rule.ID,
 		rule.BankName,
 		rule.Category,
-		rule.MonthYear.Format("01/2006"),
+		rule.MonthYear.Format("02.01.2006"),
 		rule.CashbackPercent,
 		rule.MaxAmount,
 		rule.UserDisplayName,
@@ -76,59 +76,81 @@ func formatCashbackRule(rule *models.CashbackRule) string {
 // formatSavedCashback форматирует сохранённый кэшбэк.
 func formatSavedCashback(rule *models.CashbackRule) string {
 	return fmt.Sprintf(
-		"✅ %% кешбек успешно сохранён!\n\n"+
+		"✅ Кешбек успешно сохранён!\n\n"+
 			"🆔 ID: %d\n"+
 			"🏦 Банк: %s\n"+
 			"📁 Категория: %s\n"+
-			"📅 Месяц: %s\n"+
+			"📅 Действует до: %s\n"+
 			"💰 Кэшбэк: %.1f%%\n"+
 			"💵 Макс. сумма: %.0f₽\n"+
 			"👤 Карта: %s",
 		rule.ID,
 		rule.BankName,
 		rule.Category,
-		rule.MonthYear.Format("2006-01"),
+		rule.MonthYear.Format("02.01.2006"),
 		rule.CashbackPercent,
 		rule.MaxAmount,
 		rule.UserDisplayName,
 	)
 }
 
-// formatBestCashback форматирует лучший кэшбэк.
-func formatBestCashback(rule *models.CashbackRule) string {
-	return fmt.Sprintf(
-		"🏆 Лучший кэшбэк для \"%s\":\n\n"+
-			"📅 Месяц: %s\n"+
-			"🏦 Банк: %s\n"+
-			"💰 Кэшбэк: %.1f%%\n"+
-			"💵 Макс. сумма: %.0f₽\n"+
-			"👤 Карта: %s",
-		rule.Category,
-		rule.MonthYear.Format("01/2006"),
-		rule.BankName,
-		rule.CashbackPercent,
-		rule.MaxAmount,
-		rule.UserDisplayName,
-	)
+// formatBestCashback форматирует лучший кэшбэк с учетом fallback.
+func formatBestCashback(rule *models.CashbackRule, requestedCategory string, isFallback bool) string {
+	var text string
+	
+	if isFallback {
+		text = fmt.Sprintf(
+			"💡 Кэшбэк для категории \"%s\" не найден.\n"+
+				"Показываю кэшбэк на \"Все покупки\":\n\n"+
+				"🏦 Банк: %s\n"+
+				"📅 Действует до: %s\n"+
+				"💰 Кэшбэк: %.1f%%\n"+
+				"💵 Макс. сумма: %.0f₽\n"+
+				"👤 Карта: %s",
+			requestedCategory,
+			rule.BankName,
+			rule.MonthYear.Format("02.01.2006"),
+			rule.CashbackPercent,
+			rule.MaxAmount,
+			rule.UserDisplayName,
+		)
+	} else {
+		text = fmt.Sprintf(
+			"🏆 Лучший кэшбэк для \"%s\":\n\n"+
+				"🏦 Банк: %s\n"+
+				"📅 Действует до: %s\n"+
+				"💰 Кэшбэк: %.1f%%\n"+
+				"💵 Макс. сумма: %.0f₽\n"+
+				"👤 Карта: %s",
+			rule.Category,
+			rule.BankName,
+			rule.MonthYear.Format("02.01.2006"),
+			rule.CashbackPercent,
+			rule.MaxAmount,
+			rule.UserDisplayName,
+		)
+	}
+	
+	return text
 }
 
 // formatCashbackList форматирует список кэшбэков.
 func formatCashbackList(rules []models.CashbackRule, total int) string {
 	if len(rules) == 0 {
-		return "📝 Пока нет % кешбека в группе.\n\nДобавьте первым!"
+		return "📝 Пока нет кешбека в группе.\n\nДобавьте первым!"
 	}
 
-	text := fmt.Sprintf("📋 Все %% кешбека группы (%d):\n\n", total)
+	text := fmt.Sprintf("📋 Все кешбека группы (%d):\n\n", total)
 
 	for i, rule := range rules {
 		text += fmt.Sprintf(
-			"%d. %s - %s\n   %.1f%% до %.0f₽ (%s)\n   👤 Карта: %s\n   ID: %d\n\n",
+			"%d. %s - %s\n   %.1f%% до %.0f₽ (до %s)\n   👤 Карта: %s\n   ID: %d\n\n",
 			i+1,
 			rule.BankName,
 			rule.Category,
 			rule.CashbackPercent,
 			rule.MaxAmount,
-			rule.MonthYear.Format("01/2006"),
+			rule.MonthYear.Format("02.01.2006"),
 			rule.UserDisplayName,
 			rule.ID,
 		)
@@ -140,19 +162,19 @@ func formatCashbackList(rules []models.CashbackRule, total int) string {
 // formatUpdatePrompt форматирует запрос на обновление.
 func formatUpdatePrompt(rule *models.CashbackRule) string {
 	return fmt.Sprintf(
-		"📝 Обновление %% кешбека ID: %d\n\n"+
+		"📝 Обновление кешбека ID: %d\n\n"+
 			"Текущие данные:\n"+
 			"🏦 Банк: %s\n"+
 			"📁 Категория: %s\n"+
-			"📅 Месяц: %s\n"+
+			"📅 Действует до: %s\n"+
 			"💰 Кэшбэк: %.1f%%\n"+
 			"💵 Макс. сумма: %.0f₽\n\n"+
 			"Отправьте новые данные через запятую:\n"+
-			"Банк, Категория, Процент, Сумма[, Месяц]",
+			"Банк, Категория, Процент, Сумма[, Дата окончания]",
 		rule.ID,
 		rule.BankName,
 		rule.Category,
-		rule.MonthYear.Format("01/2006"),
+		rule.MonthYear.Format("02.01.2006"),
 		rule.CashbackPercent,
 		rule.MaxAmount,
 	)
@@ -161,7 +183,7 @@ func formatUpdatePrompt(rule *models.CashbackRule) string {
 // formatDeletePrompt форматирует запрос на удаление.
 func formatDeletePrompt(rule *models.CashbackRule) string {
 	return fmt.Sprintf(
-		"⚠️ Вы уверены, что хотите удалить %% кешбек?\n\n"+
+		"⚠️ Вы уверены, что хотите удалить кешбек?\n\n"+
 			"🆔 ID: %d\n"+
 			"🏦 Банк: %s\n"+
 			"📁 Категория: %s\n"+
@@ -181,9 +203,9 @@ func formatNotFoundMessage(category, monthYear string) string {
 		"❌ Кэшбэк не найден\n\n"+
 			"📁 Категория: \"%s\"\n"+
 			"📅 Месяц: %s\n\n"+
-			"💡 Похоже, ещё нет %% кешбека для этой категории.\n\n"+
+			"💡 Похоже, ещё нет кешбека для этой категории.\n\n"+
 			"Чтобы добавить, напишите через запятую:\n"+
-			"Банк, %s, Процент, Сумма",
+			"Банк, %s, Процент, Сумма[, Дата окончания]",
 		category, monthYear, category,
 	)
 }

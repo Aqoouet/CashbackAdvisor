@@ -199,7 +199,9 @@ func (b *Bot) handleBestQueryWithCorrection(message *tgbotapi.Message, category 
 		return
 	}
 
-	b.sendText(message.Chat.ID, formatBestCashback(rule))
+	// Проверяем, является ли результат fallback на "Все покупки"
+	isFallback := rule.Category == "Все покупки" && category != "Все покупки"
+	b.sendText(message.Chat.ID, formatBestCashback(rule, category, isFallback))
 }
 
 // trySuggestSimilarCategory пытается найти похожую категорию.

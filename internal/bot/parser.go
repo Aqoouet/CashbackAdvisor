@@ -71,18 +71,19 @@ func parseCommaSeparated(text string) (*ParsedData, error) {
 		return nil, fmt.Errorf("неверный формат суммы: %s", parts[3])
 	}
 	
-	// 5. Месяц (опционален)
+	// 5. Дата окончания (опциональна)
 	if len(parts) >= 5 && strings.TrimSpace(parts[4]) != "" {
-		monthStr := strings.TrimSpace(parts[4])
-		if monthYear, err := parseMonth(monthStr); err == nil {
-			data.MonthYear = monthYear
+		dateStr := strings.TrimSpace(parts[4])
+		if expiryDate, err := parseExpiryDate(dateStr); err == nil {
+			data.MonthYear = expiryDate
 		} else {
-			return nil, fmt.Errorf("неверный формат месяца: %s", parts[4])
+			return nil, fmt.Errorf("неверный формат даты: %s. Используйте дд.мм.гггг", parts[4])
 		}
 	} else {
-		// Используем текущий месяц по умолчанию
+		// Используем последний день текущего месяца по умолчанию
 		now := time.Now()
-		data.MonthYear = fmt.Sprintf("%d-%02d", now.Year(), now.Month())
+		lastDay := time.Date(now.Year(), now.Month()+1, 0, 0, 0, 0, 0, time.UTC)
+		data.MonthYear = lastDay.Format("02.01.2006")
 	}
 	
 	return data, nil
@@ -95,14 +96,14 @@ func parseFreeText(text string) (*ParsedData, error) {
 
 	// Паттерны для извлечения данных
 	
-	// Месяц и год (декабрь, 2024-12, 12/2024, дек 2024, и т.д.)
-	monthPattern := regexp.MustCompile(`(?i)(январ[ья]|феврал[ья]|март[а]?|апрел[ья]|ма[йя]|июн[ья]|июл[ья]|август[а]?|сентябр[ья]|октябр[ья]|ноябр[ья]|декабр[ья]|(\d{4})-(\d{2})|(\d{2})/(\d{4})|(\d{2})\.(\d{4}))`)
-	if match := monthPattern.FindString(text); match != "" {
-		monthYear, err := parseMonth(match)
+	// Дата окончания (дд.мм.гггг, dd.mm.yyyy, dd/mm/yyyy, или названия месяцев)
+	datePattern := regexp.MustCompile(`(?i)(\d{2}\.\d{2}\.\d{4}|\d{2}/\d{2}/\d{4}|январ[ья]|феврал[ья]|март[а]?|апрел[ья]|ма[йя]|июн[ья]|июл[ья]|август[а]?|сентябр[ья]|октябр[ья]|ноябр[ья]|декабр[ья]|(\d{4})-(\d{2})|(\d{2})/(\d{4})|(\d{2})\.(\d{4}))`)
+	if match := datePattern.FindString(text); match != "" {
+		expiryDate, err := parseExpiryDate(match)
 		if err == nil {
-			data.MonthYear = monthYear
+			data.MonthYear = expiryDate
 		} else {
-			errors = append(errors, "не удалось распознать месяц")
+			errors = append(errors, "не удалось распознать дату")
 		}
 	}
 
@@ -219,53 +220,74 @@ func normalizeString(s string) string {
 	return strings.Join(words, " ")
 }
 
-// parseMonth преобразует различные форматы месяца в YYYY-MM
-func parseMonth(monthStr string) (string, error) {
-	monthStr = strings.ToLower(strings.TrimSpace(monthStr))
+// parseExpiryDate преобразует различные форматы даты в дд.мм.гггг
+func parseExpiryDate(dateStr string) (string, error) {
+	dateStr = strings.ToLower(strings.TrimSpace(dateStr))
 	
-	// Если уже в формате YYYY-MM
-	if matched, _ := regexp.MatchString(`^\d{4}-\d{2}$`, monthStr); matched {
-		return monthStr, nil
+	// Формат дд.мм.гггг
+	if matched, _ := regexp.MatchString(`^\d{2}\.\d{2}\.\d{4}$`, dateStr); matched {
+		return dateStr, nil
 	}
 
-	// Если в формате MM/YYYY
-	if matched, _ := regexp.MatchString(`^\d{2}/\d{4}$`, monthStr); matched {
-		parts := strings.Split(monthStr, "/")
-		return fmt.Sprintf("%s-%s", parts[1], parts[0]), nil
+	// Формат дд/мм/гггг → дд.мм.гггг
+	if matched, _ := regexp.MatchString(`^\d{2}/\d{2}/\d{4}$`, dateStr); matched {
+		return strings.ReplaceAll(dateStr, "/", "."), nil
 	}
 
-	// Если в формате MM.YYYY
-	if matched, _ := regexp.MatchString(`^\d{2}\.\d{4}$`, monthStr); matched {
-		parts := strings.Split(monthStr, ".")
-		return fmt.Sprintf("%s-%s", parts[1], parts[0]), nil
+	// Обратная совместимость: YYYY-MM → последний день месяца в формате дд.мм.гггг
+	if matched, _ := regexp.MatchString(`^\d{4}-\d{2}$`, dateStr); matched {
+		parts := strings.Split(dateStr, "-")
+		year, _ := strconv.Atoi(parts[0])
+		month, _ := strconv.Atoi(parts[1])
+		lastDay := time.Date(year, time.Month(month+1), 0, 0, 0, 0, 0, time.UTC)
+		return lastDay.Format("02.01.2006"), nil
 	}
 
-	// Названия месяцев
-	months := map[string]string{
-		"январ": "01", "янв": "01",
-		"феврал": "02", "фев": "02",
-		"март": "03", "мар": "03",
-		"апрел": "04", "апр": "04",
-		"май": "05", "ма": "05",
-		"июн": "06", "ию": "06",
-		"июл": "07",
-		"август": "08", "авг": "08",
-		"сентябр": "09", "сен": "09",
-		"октябр": "10", "окт": "10",
-		"ноябр": "11", "ноя": "11",
-		"декабр": "12", "дек": "12",
+	// Обратная совместимость: MM/YYYY → последний день месяца
+	if matched, _ := regexp.MatchString(`^\d{2}/\d{4}$`, dateStr); matched {
+		parts := strings.Split(dateStr, "/")
+		year, _ := strconv.Atoi(parts[1])
+		month, _ := strconv.Atoi(parts[0])
+		lastDay := time.Date(year, time.Month(month+1), 0, 0, 0, 0, 0, time.UTC)
+		return lastDay.Format("02.01.2006"), nil
+	}
+
+	// Обратная совместимость: MM.YYYY → последний день месяца
+	if matched, _ := regexp.MatchString(`^\d{2}\.\d{4}$`, dateStr); matched {
+		parts := strings.Split(dateStr, ".")
+		year, _ := strconv.Atoi(parts[1])
+		month, _ := strconv.Atoi(parts[0])
+		lastDay := time.Date(year, time.Month(month+1), 0, 0, 0, 0, 0, time.UTC)
+		return lastDay.Format("02.01.2006"), nil
+	}
+
+	// Названия месяцев → последний день указанного месяца
+	months := map[string]int{
+		"январ": 1, "янв": 1,
+		"феврал": 2, "фев": 2,
+		"март": 3, "мар": 3,
+		"апрел": 4, "апр": 4,
+		"май": 5, "ма": 5,
+		"июн": 6, "ию": 6,
+		"июл": 7,
+		"август": 8, "авг": 8,
+		"сентябр": 9, "сен": 9,
+		"октябр": 10, "окт": 10,
+		"ноябр": 11, "ноя": 11,
+		"декабр": 12, "дек": 12,
 	}
 
 	// Определяем месяц по названию
 	for key, month := range months {
-		if strings.Contains(monthStr, key) {
+		if strings.Contains(dateStr, key) {
 			// Берем текущий год
 			year := time.Now().Year()
-			return fmt.Sprintf("%d-%s", year, month), nil
+			lastDay := time.Date(year, time.Month(month+1), 0, 0, 0, 0, 0, time.UTC)
+			return lastDay.Format("02.01.2006"), nil
 		}
 	}
 
-	return "", fmt.Errorf("не удалось распознать месяц: %s", monthStr)
+	return "", fmt.Errorf("не удалось распознать дату: %s", dateStr)
 }
 
 // isNumber проверяет, является ли строка числом
