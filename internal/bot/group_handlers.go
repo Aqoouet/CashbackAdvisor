@@ -106,7 +106,7 @@ func (b *Bot) showAvailableGroups(chatID int64) {
 
 	text := "👥 К какой группе присоединиться?\n\n"
 	text += "📋 Доступные группы:\n"
-	for i, group := range groups {
+	for _, group := range groups {
 		text += fmt.Sprintf("• %s\n", group)
 	}
 	text += "\n💬 Введите название группы (без команды)\n"
