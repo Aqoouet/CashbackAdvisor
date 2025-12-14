@@ -278,13 +278,16 @@ func (b *Bot) handleBestQueryWithCorrection(message *tgbotapi.Message, category 
 	
 	// Если нашли точные совпадения - показываем все
 	if err == nil && len(allRules) > 0 {
+		log.Printf("✅ Найдено %d активных кешбеков для категории '%s'", len(allRules), category)
 		b.sendText(message.Chat.ID, formatAllCashbackResults(allRules, category, false))
 		return
 	}
 	
-	// Не нашли точную категорию - пробуем "Все покупки"
+	// Не нашли точную категорию (или все кешбеки истекли) - пробуем "Все покупки"
+	log.Printf("⚠️ Не найдено активных кешбеков для '%s' (err: %v), пробуем 'Все покупки'", category, err)
 	allPurchasesRules, errAll := b.getAllCashbacksByCategory(groupName, "Все покупки", monthYear)
 	if errAll == nil && len(allPurchasesRules) > 0 {
+		log.Printf("✅ Найдено %d кешбеков для 'Все покупки' как fallback", len(allPurchasesRules))
 		b.sendText(message.Chat.ID, formatAllCashbackResults(allPurchasesRules, category, true))
 		return
 	}
@@ -404,6 +407,7 @@ func (b *Bot) getAllCashbacksByCategory(groupName, category, monthYear string) (
 	
 	// Фильтруем по категории (поиск по подстроке) и дате
 	var filtered []models.CashbackRule
+	var matchedButExpired int
 	now := time.Now()
 	
 	for _, rule := range list.Rules {
@@ -414,12 +418,21 @@ func (b *Bot) getAllCashbacksByCategory(groupName, category, monthYear string) (
 		// Также проверяем точное совпадение (приоритет)
 		exactMatch := strings.EqualFold(rule.Category, category)
 		
-		if (exactMatch || containsCategory) && rule.MonthYear.After(now.AddDate(0, 0, -1)) {
-			filtered = append(filtered, rule)
+		if exactMatch || containsCategory {
+			if rule.MonthYear.After(now.AddDate(0, 0, -1)) {
+				filtered = append(filtered, rule)
+			} else {
+				matchedButExpired++
+				log.Printf("⏰ Найден кешбек для '%s' но он истек: %s (срок до %s)", 
+					category, rule.BankName, rule.MonthYear.Format("02.01.2006"))
+			}
 		}
 	}
 	
 	if len(filtered) == 0 {
+		if matchedButExpired > 0 {
+			log.Printf("❌ Для '%s' найдено %d кешбеков, но все истекли", category, matchedButExpired)
+		}
 		return nil, fmt.Errorf("кэшбэк не найден")
 	}
 	
