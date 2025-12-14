@@ -117,6 +117,26 @@ func (r *Repository) GetBestCashback(ctx context.Context, groupName, category st
 	return rule, nil
 }
 
+// GetAllCashbackByCategory получает все правила по категории.
+func (r *Repository) GetAllCashbackByCategory(ctx context.Context, groupName, category string, monthYear time.Time) ([]models.CashbackRule, error) {
+	rows, err := r.db.Pool.Query(ctx, QueryGetAllCashbackByCategory, groupName, category, monthYear)
+	if err != nil {
+		return nil, fmt.Errorf("получение кэшбэков по категории: %w", err)
+	}
+	defer rows.Close()
+
+	rules, err := r.scanCashbackRules(rows)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(rules) == 0 {
+		return nil, fmt.Errorf("правила для '%s': %w", category, ErrNotFound)
+	}
+
+	return rules, nil
+}
+
 // --- Методы для fuzzy поиска ---
 
 // FuzzySearchGroupName выполняет fuzzy-поиск по названию группы.

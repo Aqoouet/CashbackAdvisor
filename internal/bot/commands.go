@@ -137,7 +137,12 @@ func (b *Bot) handleBestCommand(message *tgbotapi.Message) {
 	b.sendText(message.Chat.ID, text)
 }
 
-// handleList обрабатывает команду /list.
+// handleList обрабатывает команду /list с поддержкой пагинации.
+// Форматы:
+// /list - последние 5 строк
+// /list all - все строки
+// /list 1-10 - строки с 1 по 10
+// /list 1-5,8,10 - строки с 1 по 5, а также 8 и 10
 func (b *Bot) handleList(message *tgbotapi.Message) {
 	userIDStr := strconv.FormatInt(message.From.ID, 10)
 	groupName, err := b.client.GetUserGroup(userIDStr)
@@ -146,13 +151,54 @@ func (b *Bot) handleList(message *tgbotapi.Message) {
 		return
 	}
 
-	list, err := b.client.ListCashback(groupName, 100, 0)
+	// Парсим аргументы команды
+	args := strings.TrimPrefix(message.Text, "/list")
+	args = strings.TrimSpace(args)
+	
+	indices, showAll, err := ParseListArguments(args)
+	if err != nil {
+		b.sendText(message.Chat.ID, fmt.Sprintf("❌ Неверный формат: %s\n\n"+
+			"Примеры:\n"+
+			"• /list - последние 5\n"+
+			"• /list all - все\n"+
+			"• /list 1-10 - с 1 по 10\n"+
+			"• /list 1-5,8,10 - с 1 по 5, а также 8 и 10", err))
+		return
+	}
+
+	// Получаем все записи группы
+	list, err := b.client.ListCashback(groupName, 1000, 0)
 	if err != nil {
 		b.sendText(message.Chat.ID, fmt.Sprintf("❌ Ошибка: %s", err))
 		return
 	}
 
-	b.sendText(message.Chat.ID, formatCashbackList(list.Rules, list.Total))
+	// Фильтруем записи по индексам
+	var filtered []models.CashbackRule
+	if showAll {
+		filtered = list.Rules
+	} else if indices == nil {
+		// По умолчанию - последние 5
+		start := 0
+		if len(list.Rules) > 5 {
+			start = len(list.Rules) - 5
+		}
+		filtered = list.Rules[start:]
+	} else {
+		// Выбираем по индексам
+		for _, idx := range indices {
+			if idx > 0 && idx <= len(list.Rules) {
+				filtered = append(filtered, list.Rules[idx-1])
+			}
+		}
+	}
+
+	if len(filtered) == 0 {
+		b.sendText(message.Chat.ID, "📝 Нет записей для отображения.")
+		return
+	}
+
+	b.sendText(message.Chat.ID, formatCashbackListTable(filtered, list.Total, showAll, indices))
 }
 
 // handleUpdateCommand обрабатывает команду /update ID.

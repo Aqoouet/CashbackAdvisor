@@ -24,6 +24,7 @@ type RepositoryInterface interface {
 	Delete(ctx context.Context, id int64) error
 	List(ctx context.Context, limit, offset int, groupName string) ([]models.CashbackRule, int, error)
 	GetBestCashback(ctx context.Context, groupName, category string, monthYear time.Time) (*models.CashbackRule, error)
+	GetAllCashbackByCategory(ctx context.Context, groupName, category string, monthYear time.Time) ([]models.CashbackRule, error)
 
 	// Fuzzy поиск
 	FuzzySearchGroupName(ctx context.Context, value string, threshold float64, limit int) ([]models.FuzzySuggestion, error)

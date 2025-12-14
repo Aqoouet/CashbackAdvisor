@@ -319,3 +319,65 @@ func ValidateParsedData(data *ParsedData) []string {
 	return missing
 }
 
+// ParseListArguments парсит аргументы команды /list
+// Поддерживает форматы: "all", "5", "1-10", "1-5,8,10"
+func ParseListArguments(args string) ([]int, bool, error) {
+	args = strings.TrimSpace(args)
+	
+	// Нет аргументов - по умолчанию последние 5
+	if args == "" {
+		return nil, false, nil
+	}
+	
+	// Все записи
+	if args == "all" {
+		return nil, true, nil
+	}
+	
+	// Парсим диапазоны и отдельные номера: "1-5,8,10"
+	var indices []int
+	parts := strings.Split(args, ",")
+	
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		
+		// Проверяем диапазон (1-5)
+		if strings.Contains(part, "-") {
+			rangeParts := strings.Split(part, "-")
+			if len(rangeParts) != 2 {
+				return nil, false, fmt.Errorf("неверный формат диапазона: %s", part)
+			}
+			
+			start, err := strconv.Atoi(strings.TrimSpace(rangeParts[0]))
+			if err != nil {
+				return nil, false, fmt.Errorf("неверное начало диапазона: %s", rangeParts[0])
+			}
+			
+			end, err := strconv.Atoi(strings.TrimSpace(rangeParts[1]))
+			if err != nil {
+				return nil, false, fmt.Errorf("неверный конец диапазона: %s", rangeParts[1])
+			}
+			
+			if start < 1 || end < start {
+				return nil, false, fmt.Errorf("неверный диапазон: %d-%d", start, end)
+			}
+			
+			for i := start; i <= end; i++ {
+				indices = append(indices, i)
+			}
+		} else {
+			// Одиночный номер
+			num, err := strconv.Atoi(part)
+			if err != nil {
+				return nil, false, fmt.Errorf("неверный номер: %s", part)
+			}
+			if num < 1 {
+				return nil, false, fmt.Errorf("номер должен быть >= 1: %d", num)
+			}
+			indices = append(indices, num)
+		}
+	}
+	
+	return indices, false, nil
+}
+

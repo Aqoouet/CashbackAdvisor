@@ -48,6 +48,15 @@ const (
 		ORDER BY cr.cashback_percent DESC, cr.max_amount DESC
 		LIMIT 1`
 
+	// QueryGetAllCashbackByCategory — получение всех кэшбэков по категории.
+	QueryGetAllCashbackByCategory = `
+		SELECT cr.id, cr.group_name, cr.category, cr.bank_name, cr.user_id, cr.user_display_name,
+			   cr.month_year, cr.cashback_percent, cr.max_amount, cr.created_at, cr.updated_at
+		FROM cashback_rules cr
+		INNER JOIN user_groups ug ON cr.user_id = ug.user_id
+		WHERE ug.group_name = $1 AND cr.category = $2 AND cr.month_year >= $3
+		ORDER BY cr.cashback_percent DESC, cr.max_amount DESC`
+
 	// QueryFuzzySearch — fuzzy поиск по полю (шаблон).
 	QueryFuzzySearchTemplate = `
 		SELECT DISTINCT %s, similarity(%s, $1) as sim

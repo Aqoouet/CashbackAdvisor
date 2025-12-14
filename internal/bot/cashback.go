@@ -11,8 +11,27 @@ import (
 	"github.com/rymax1e/open-cashback-advisor/internal/models"
 )
 
-// handleNewCashback обрабатывает добавление нового кэшбэка.
+// handleNewCashback обрабатывает добавление нового кэшбэка (одна или несколько строк).
 func (b *Bot) handleNewCashback(message *tgbotapi.Message, userID int64) {
+	// Проверяем, многострочное ли сообщение
+	lines := strings.Split(message.Text, "\n")
+	
+	// Фильтруем пустые строки
+	var validLines []string
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line != "" && strings.Contains(line, ",") {
+			validLines = append(validLines, line)
+		}
+	}
+	
+	// Если несколько строк, обрабатываем каждую
+	if len(validLines) > 1 {
+		b.handleMultilineCashback(message, validLines)
+		return
+	}
+	
+	// Одна строка - стандартная обработка
 	data, err := ParseMessage(message.Text)
 	if err != nil {
 		b.sendText(message.Chat.ID, fmt.Sprintf("❌ Ошибка парсинга: %s", err))
@@ -33,13 +52,78 @@ func (b *Bot) handleNewCashback(message *tgbotapi.Message, userID int64) {
 	missing := ValidateParsedData(data)
 	if len(missing) > 0 {
 		text := "⚠️ Не хватает данных:\n" + strings.Join(missing, ", ") + "\n\n" +
-			"Формат: Банк, Категория, Процент, Сумма[, Месяц]\n" +
-			"Пример: \"Тинькофф, Такси, 5%, 3000\" (месяц опционален)"
+			"Формат: Банк, Категория, Процент, Сумма[, Дата окончания]\n" +
+			"Пример: \"Тинькофф, Такси, 5%, 3000\""
 		b.sendText(message.Chat.ID, text)
 		return
 	}
 
 	b.continueWithValidation(message, data)
+}
+
+// handleMultilineCashback обрабатывает добавление нескольких кэшбэков за раз.
+func (b *Bot) handleMultilineCashback(message *tgbotapi.Message, lines []string) {
+	b.sendText(message.Chat.ID, fmt.Sprintf("📝 Обрабатываю %d строк...\n", len(lines)))
+	
+	var results []string
+	successCount := 0
+	errorCount := 0
+	
+	for i, line := range lines {
+		// Парсим строку
+		data, err := ParseMessage(line)
+		if err != nil {
+			results = append(results, fmt.Sprintf("❌ Строка %d: %s", i+1, err))
+			errorCount++
+			continue
+		}
+		
+		// Проверяем полноту данных
+		missing := ValidateParsedData(data)
+		if len(missing) > 0 {
+			results = append(results, fmt.Sprintf("❌ Строка %d: не хватает %s", i+1, strings.Join(missing, ", ")))
+			errorCount++
+			continue
+		}
+		
+		// Проверяем опечатки в банке (автоматическая коррекция)
+		if correctedBank, found := FindSimilarBank(data.BankName); found && correctedBank != data.BankName {
+			log.Printf("💡 Автокоррекция банка: '%s' → '%s'", data.BankName, correctedBank)
+			data.BankName = correctedBank
+		}
+		
+		// Сохраняем без валидации через API (упрощенный режим)
+		userIDStr := strconv.FormatInt(message.From.ID, 10)
+		groupName := b.getUserGroup(message.From.ID)
+		
+		req := &models.CreateCashbackRequest{
+			GroupName:       groupName,
+			Category:        data.Category,
+			BankName:        data.BankName,
+			UserID:          userIDStr,
+			UserDisplayName: getUserDisplayName(message.From),
+			MonthYear:       data.MonthYear,
+			CashbackPercent: data.CashbackPercent,
+			MaxAmount:       data.MaxAmount,
+			Force:           true,
+		}
+		
+		rule, err := b.client.CreateCashback(req)
+		if err != nil {
+			results = append(results, fmt.Sprintf("❌ Строка %d: %s", i+1, err))
+			errorCount++
+		} else {
+			results = append(results, fmt.Sprintf("✅ Строка %d: %s - %s (ID: %d)", 
+				i+1, rule.BankName, rule.Category, rule.ID))
+			successCount++
+		}
+	}
+	
+	// Формируем итоговое сообщение
+	summary := fmt.Sprintf("📊 Результаты:\n✅ Успешно: %d\n❌ Ошибки: %d\n\n", successCount, errorCount)
+	b.sendText(message.Chat.ID, summary+strings.Join(results, "\n"))
+	
+	b.clearState(message.From.ID)
 }
 
 // suggestBankCorrection предлагает исправление названия банка.
@@ -189,19 +273,28 @@ func (b *Bot) handleBestQueryWithCorrection(message *tgbotapi.Message, category 
 
 	b.sendText(message.Chat.ID, fmt.Sprintf("🔍 Ищу лучший кэшбэк для \"%s\" в группе \"%s\"...", category, groupName))
 
-	rule, err := b.client.GetBestCashback(groupName, category, monthYear)
-	if err != nil {
-		if !skipSuggestion {
-			b.trySuggestSimilarCategory(message, category, groupName, monthYear)
-		} else {
-			b.sendText(message.Chat.ID, formatNotFoundMessage(category, monthYear))
-		}
+	// Получаем все кэшбэки по точной категории
+	allRules, err := b.getAllCashbacksByCategory(groupName, category, monthYear)
+	
+	// Если нашли точные совпадения - показываем все
+	if err == nil && len(allRules) > 0 {
+		b.sendText(message.Chat.ID, formatAllCashbackResults(allRules, category, false))
 		return
 	}
-
-	// Проверяем, является ли результат fallback на "Все покупки"
-	isFallback := rule.Category == "Все покупки" && category != "Все покупки"
-	b.sendText(message.Chat.ID, formatBestCashback(rule, category, isFallback))
+	
+	// Не нашли точную категорию - пробуем "Все покупки"
+	allPurchasesRules, errAll := b.getAllCashbacksByCategory(groupName, "Все покупки", monthYear)
+	if errAll == nil && len(allPurchasesRules) > 0 {
+		b.sendText(message.Chat.ID, formatAllCashbackResults(allPurchasesRules, category, true))
+		return
+	}
+	
+	// Ничего не нашли - пробуем похожие категории
+	if !skipSuggestion {
+		b.trySuggestSimilarCategory(message, category, groupName, monthYear)
+	} else {
+		b.sendText(message.Chat.ID, formatNotFoundMessage(category, monthYear))
+	}
 }
 
 // trySuggestSimilarCategory пытается найти похожую категорию.
@@ -278,6 +371,46 @@ func logSuggestions(suggestion *models.SuggestResponse, data *ParsedData) {
 	if len(suggestion.Suggestions.Category) > 0 {
 		log.Printf("   Предложение категории: '%s' (было: '%s')",
 			suggestion.Suggestions.Category[0].Value, data.Category)
+	}
+}
+
+// getAllCashbacksByCategory получает все кэшбэки по категории через список всех кэшбэков группы.
+func (b *Bot) getAllCashbacksByCategory(groupName, category, monthYear string) ([]models.CashbackRule, error) {
+	// Получаем все кэшбэки группы
+	list, err := b.client.ListCashback(groupName, 1000, 0)
+	if err != nil {
+		return nil, err
+	}
+	
+	// Фильтруем по категории и дате
+	var filtered []models.CashbackRule
+	now := time.Now()
+	
+	for _, rule := range list.Rules {
+		if rule.Category == category && rule.MonthYear.After(now.AddDate(0, 0, -1)) {
+			filtered = append(filtered, rule)
+		}
+	}
+	
+	if len(filtered) == 0 {
+		return nil, fmt.Errorf("кэшбэк не найден")
+	}
+	
+	// Сортируем по убыванию процента
+	sortCashbackByPercent(filtered)
+	
+	return filtered, nil
+}
+
+// sortCashbackByPercent сортирует кэшбэки по убыванию процента.
+func sortCashbackByPercent(rules []models.CashbackRule) {
+	for i := 0; i < len(rules)-1; i++ {
+		for j := i + 1; j < len(rules); j++ {
+			if rules[j].CashbackPercent > rules[i].CashbackPercent ||
+				(rules[j].CashbackPercent == rules[i].CashbackPercent && rules[j].MaxAmount > rules[i].MaxAmount) {
+				rules[i], rules[j] = rules[j], rules[i]
+			}
+		}
 	}
 }
 
