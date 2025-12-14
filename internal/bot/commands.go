@@ -384,7 +384,7 @@ func (b *Bot) handleList(message *tgbotapi.Message) {
 		return
 	}
 
-	b.sendText(message.Chat.ID, formatCashbackListTable(filtered, list.Total, showAll, indices))
+	b.sendTextPlain(message.Chat.ID, formatCashbackListTable(filtered, list.Total, showAll, indices))
 }
 
 // handleUpdateCommand обрабатывает команду /update ID.
@@ -634,6 +634,6 @@ func (b *Bot) handleUserList(message *tgbotapi.Message) {
 		return
 	}
 
-	b.sendText(message.Chat.ID, formatUserListTable(filtered, len(users)))
+	b.sendTextPlain(message.Chat.ID, formatUserListTable(filtered, len(users)))
 }
 

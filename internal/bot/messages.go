@@ -22,6 +22,20 @@ func (b *Bot) sendText(chatID int64, text string) {
 	}
 }
 
+// sendTextPlain отправляет текстовое сообщение БЕЗ HTML парсинга (для таблиц).
+func (b *Bot) sendTextPlain(chatID int64, text string) {
+	msg := tgbotapi.NewMessage(chatID, text)
+	// НЕ используем ParseMode для совместимости с таблицами
+
+	kb := tgbotapi.NewReplyKeyboard(buildKeyboard(nil)...)
+	kb.ResizeKeyboard = true
+	msg.ReplyMarkup = kb
+
+	if _, err := b.api.Send(msg); err != nil {
+		log.Printf("❌ Ошибка отправки сообщения: %v", err)
+	}
+}
+
 // sendWithButtons отправляет сообщение с указанными кнопками.
 func (b *Bot) sendWithButtons(chatID int64, text string, buttons [][]string) {
 	msg := tgbotapi.NewMessage(chatID, text)
@@ -232,32 +246,25 @@ func formatCashbackListTable(rules []models.CashbackRule, total int, showAll boo
 		header = fmt.Sprintf("📋 Выбранные кешбеки (всего %d):\n\n", total)
 	}
 
-	text := header + "<code>"
-	
-	// Заголовок таблицы
-	text += "N  | Банк              | Категория         | %    | Сумма   | До         | Карта         | ID\n"
-	text += "---+-------------------+-------------------+------+---------+------------+---------------+----\n"
+	text := header
 	
 	for i, rule := range rules {
-		// Обрезаем длинные строки
-		bank := truncateString(rule.BankName, 17)
-		category := truncateString(rule.Category, 17)
-		card := truncateString(rule.UserDisplayName, 13)
-		
 		text += fmt.Sprintf(
-			"%-3d| %-17s | %-17s | %4.1f | %7.0f | %10s | %-13s | %d\n",
+			"%d. 🏦 %s\n"+
+			"   📁 %s\n"+
+			"   💰 %.1f%% до %.0f₽\n"+
+			"   📅 До %s\n"+
+			"   👤 %s (ID: %d)\n\n",
 			i+1,
-			bank,
-			category,
+			rule.BankName,
+			rule.Category,
 			rule.CashbackPercent,
 			rule.MaxAmount,
 			rule.MonthYear.Format("02.01.2006"),
-			card,
+			rule.UserDisplayName,
 			rule.ID,
 		)
 	}
-	
-	text += "</code>\n\n"
 	
 	if !showAll && indices == nil && total > 5 {
 		text += "💡 Используйте:\n"
@@ -361,24 +368,14 @@ func formatUserListTable(users []models.UserInfo, total int) string {
 	text := fmt.Sprintf("👥 Пользователи группы \"%s\" (показано %d из %d):\n\n", 
 		users[0].GroupName, len(users), total)
 	
-	text += "<code>"
-	text += "N  | Имя                    | ID              \n"
-	text += "---+------------------------+-----------------\n"
-	
 	for i, user := range users {
-		name := truncateString(user.UserDisplayName, 22)
-		userID := truncateString(user.UserID, 15)
-		
 		text += fmt.Sprintf(
-			"%-3d| %-22s | %-15s\n",
+			"%d. 👤 %s\n   ID: %s\n\n",
 			i+1,
-			name,
-			userID,
+			user.UserDisplayName,
+			user.UserID,
 		)
 	}
-	
-	text += "</code>\n\n"
-	
 	if len(users) < total {
 		text += "💡 Используйте:\n"
 		text += "• /userlist - все пользователи\n"
