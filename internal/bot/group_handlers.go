@@ -8,6 +8,7 @@ import (
 	"time"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
+	"github.com/rymax1e/open-cashback-advisor/internal/models"
 )
 
 // handleCreateGroup обрабатывает команду /creategroup.
@@ -136,68 +137,91 @@ func (b *Bot) handleGroupInfo(message *tgbotapi.Message) {
 		}
 	}
 
-	members, err := b.client.GetGroupMembers(groupName)
+	// Получаем информацию о пользователях
+	users, err := b.client.GetGroupUsers(groupName)
 	if err != nil {
 		b.sendText(message.Chat.ID, "❌ Ошибка получения участников")
 		return
 	}
 
-	text := b.formatGroupInfo(groupName, members)
+	// Получаем все кешбеки группы для подсчета активности
+	list, err := b.client.ListCashback(groupName, 1000, 0)
+	if err != nil {
+		b.sendText(message.Chat.ID, "❌ Ошибка получения данных")
+		return
+	}
+
+	text := b.formatGroupInfo(groupName, users, list.Rules)
 	b.sendText(message.Chat.ID, text)
 }
 
 // formatGroupInfo форматирует информацию о группе.
-func (b *Bot) formatGroupInfo(groupName string, members []string) string {
-	text := fmt.Sprintf("📊 Группа: %s\n\n", groupName)
-	text += fmt.Sprintf("👥 Участников: %d\n\n", len(members))
+func (b *Bot) formatGroupInfo(groupName string, users []models.UserInfo, rules []models.CashbackRule) string {
+	text := fmt.Sprintf("📊 Информация о группе\n\n")
+	text += fmt.Sprintf("👥 Группа: <b>%s</b>\n", groupName)
+	text += fmt.Sprintf("📌 Участников: %d\n", len(users))
+	text += fmt.Sprintf("💳 Всего кешбеков: %d\n\n", len(rules))
 
-	// Получаем кэшбэки текущего месяца
+	if len(users) == 0 {
+		text += "📝 Пока нет участников в группе."
+		return text
+	}
+
+	// Подсчитываем статистику по каждому пользователю
+	userStats := make(map[string]struct {
+		Name          string
+		TotalRules    int
+		ActiveRules   int
+		LastAddedDate time.Time
+	})
+
 	now := time.Now()
-	monthYear := fmt.Sprintf("%d-%02d", now.Year(), now.Month())
-
-	log.Printf("🔍 /groupinfo debug: groupName=%s, monthYear=%s", groupName, monthYear)
-
-	list, err := b.client.ListCashback(groupName, 1000, 0)
-	if err != nil {
-		log.Printf("❌ ListCashback error: %v", err)
-		return text
-	}
-
-	log.Printf("✅ ListCashback returned %d rules", len(list.Rules))
-
-	if len(list.Rules) == 0 {
-		return text
-	}
-
-	// Группируем по категориям
-	categories := make(map[string][]string)
-	matchCount := 0
-
-	for _, rule := range list.Rules {
-		ruleMonth := rule.MonthYear.Format("2006-01")
-		log.Printf("  📅 Rule ID=%d, category=%s, month=%s (checking against %s)",
-			rule.ID, rule.Category, ruleMonth, monthYear)
-
-		if ruleMonth == monthYear {
-			matchCount++
-			info := fmt.Sprintf("%.1f%% (%s, карта: %s)", rule.CashbackPercent, rule.BankName, rule.UserDisplayName)
-			categories[rule.Category] = append(categories[rule.Category], info)
+	for _, rule := range rules {
+		stats := userStats[rule.UserID]
+		stats.Name = rule.UserDisplayName
+		stats.TotalRules++
+		
+		// Считаем активные (не истекшие) кешбеки
+		if rule.MonthYear.After(now.AddDate(0, 0, -1)) {
+			stats.ActiveRules++
 		}
+		
+		// Отслеживаем последнюю дату добавления
+		if rule.CreatedAt.After(stats.LastAddedDate) {
+			stats.LastAddedDate = rule.CreatedAt
+		}
+		
+		userStats[rule.UserID] = stats
 	}
 
-	log.Printf("✅ Matched %d rules for month %s, categories: %d", matchCount, monthYear, len(categories))
-
-	if len(categories) > 0 {
-		text += "💰 Кэшбэк в текущем месяце:\n\n"
-		for category, infos := range categories {
-			text += fmt.Sprintf("📁 %s:\n", category)
-			for _, info := range infos {
-				text += fmt.Sprintf("   • %s\n", info)
+	// Формируем список участников
+	text += "👤 Участники:\n\n"
+	
+	for i, user := range users {
+		stats := userStats[user.UserID]
+		text += fmt.Sprintf("%d. <b>%s</b>\n", i+1, user.UserDisplayName)
+		
+		if stats.TotalRules > 0 {
+			text += fmt.Sprintf("   💳 Кешбеков: %d (активных: %d)\n", stats.TotalRules, stats.ActiveRules)
+			
+			if !stats.LastAddedDate.IsZero() {
+				// Форматируем дату последней активности
+				daysSince := int(now.Sub(stats.LastAddedDate).Hours() / 24)
+				if daysSince == 0 {
+					text += "   📅 Последняя активность: сегодня\n"
+				} else if daysSince == 1 {
+					text += "   📅 Последняя активность: вчера\n"
+				} else if daysSince < 7 {
+					text += fmt.Sprintf("   📅 Последняя активность: %d дн. назад\n", daysSince)
+				} else {
+					text += fmt.Sprintf("   📅 Последняя активность: %s\n", stats.LastAddedDate.Format("02.01.2006"))
+				}
 			}
-			text += "\n"
+		} else {
+			text += "   📝 Еще не добавлял кешбеки\n"
 		}
-	} else {
-		text += "💡 Пока нет кэшбэков в текущем месяце"
+		
+		text += "\n"
 	}
 
 	return text
