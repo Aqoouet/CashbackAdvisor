@@ -605,7 +605,7 @@ func (b *Bot) handleUserInfo(message *tgbotapi.Message) {
 		return
 	}
 
-	b.sendText(message.Chat.ID, formatUserInfo(userRules))
+	b.sendText(message.Chat.ID, formatUserInfo(userRules, groupName))
 }
 
 // handleUserList обрабатывает команду /userlist [a-b,c|all].

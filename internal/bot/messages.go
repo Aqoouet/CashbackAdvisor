@@ -341,21 +341,42 @@ func formatBankList(banks []string) string {
 }
 
 // formatUserInfo форматирует информацию о кэшбэках пользователя.
-func formatUserInfo(rules []models.CashbackRule) string {
+func formatUserInfo(rules []models.CashbackRule, groupName string) string {
 	if len(rules) == 0 {
 		return "📝 Нет кэшбэков"
 	}
 
 	userName := rules[0].UserDisplayName
-	text := fmt.Sprintf("👤 Кэшбэки пользователя %s (%d):\n\n", userName, len(rules))
+	
+	// Подсчитываем активные кешбеки
+	now := time.Now()
+	activeCount := 0
+	for _, rule := range rules {
+		if rule.MonthYear.After(now.AddDate(0, 0, -1)) {
+			activeCount++
+		}
+	}
+	
+	text := fmt.Sprintf("👤 Кэшбэки пользователя <b>%s</b>\n\n", userName)
+	text += fmt.Sprintf("👥 Группа: %s\n", groupName)
+	text += fmt.Sprintf("💳 Всего кешбеков: %d (активных: %d)\n\n", len(rules), activeCount)
 
 	for i, rule := range rules {
+		// Помечаем истекшие кешбеки
+		statusIcon := ""
+		if rule.MonthYear.Before(now.AddDate(0, 0, -1)) {
+			statusIcon = " ⏰"
+		}
+		
 		text += fmt.Sprintf(
-			"%d. %s - %s\n"+
-				"   %.1f%% до %.0f₽ (до %s)\n"+
-				"   ID: %d\n\n",
+			"%d. 🏦 %s%s\n"+
+				"   📁 %s\n"+
+				"   💰 %.1f%% до %.0f₽\n"+
+				"   📅 До %s\n"+
+				"   🆔 ID: %d\n\n",
 			i+1,
 			rule.BankName,
+			statusIcon,
 			rule.Category,
 			rule.CashbackPercent,
 			rule.MaxAmount,
