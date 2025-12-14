@@ -306,3 +306,37 @@ func (s *Service) GetAllGroups(ctx context.Context) ([]string, error) {
 func (s *Service) GetGroupMembers(ctx context.Context, groupName string) ([]string, error) {
 	return s.repo.GetGroupMembers(ctx, groupName)
 }
+
+// GetCashbackByBank получает все кэшбэки по банку в группе.
+func (s *Service) GetCashbackByBank(ctx context.Context, groupName, bankName string) ([]models.CashbackRule, error) {
+	if err := validator.ValidateTextField("group_name", groupName, true); err != nil {
+		return nil, err
+	}
+	if err := validator.ValidateTextField("bank_name", bankName, true); err != nil {
+		return nil, err
+	}
+
+	// Используем текущую дату для фильтрации активных кэшбэков
+	now := time.Now()
+	return s.repo.GetCashbackByBank(ctx, groupName, bankName, now)
+}
+
+// GetActiveCategories возвращает список активных категорий в группе.
+func (s *Service) GetActiveCategories(ctx context.Context, groupName string) ([]string, error) {
+	if err := validator.ValidateTextField("group_name", groupName, true); err != nil {
+		return nil, err
+	}
+
+	now := time.Now()
+	return s.repo.GetActiveCategories(ctx, groupName, now)
+}
+
+// GetActiveBanks возвращает список активных банков в группе.
+func (s *Service) GetActiveBanks(ctx context.Context, groupName string) ([]string, error) {
+	if err := validator.ValidateTextField("group_name", groupName, true); err != nil {
+		return nil, err
+	}
+
+	now := time.Now()
+	return s.repo.GetActiveBanks(ctx, groupName, now)
+}

@@ -277,6 +277,81 @@ func truncateString(s string, maxLen int) string {
 	return s[:maxLen-2] + ".."
 }
 
+// formatBankInfo форматирует информацию о кэшбэках банка.
+func formatBankInfo(bankName string, rules []models.CashbackRule) string {
+	text := fmt.Sprintf("🏦 Активные кэшбэки банка \"%s\" (%d):\n\n", bankName, len(rules))
+
+	for i, rule := range rules {
+		text += fmt.Sprintf(
+			"%d. 📁 %s\n"+
+				"   💰 %.1f%% до %.0f₽\n"+
+				"   📅 До %s\n"+
+				"   👤 %s\n\n",
+			i+1,
+			rule.Category,
+			rule.CashbackPercent,
+			rule.MaxAmount,
+			rule.MonthYear.Format("02.01.2006"),
+			rule.UserDisplayName,
+		)
+	}
+
+	return text
+}
+
+// formatCategoryList форматирует список активных категорий.
+func formatCategoryList(categories []string) string {
+	text := fmt.Sprintf("📁 Активные категории (%d):\n\n", len(categories))
+
+	for i, category := range categories {
+		text += fmt.Sprintf("%d. %s\n", i+1, category)
+	}
+
+	text += "\n💡 Используйте /best для поиска лучшего кэшбэка по категории"
+
+	return text
+}
+
+// formatBankList форматирует список активных банков.
+func formatBankList(banks []string) string {
+	text := fmt.Sprintf("🏦 Активные банки (%d):\n\n", len(banks))
+
+	for i, bank := range banks {
+		text += fmt.Sprintf("%d. %s\n", i+1, bank)
+	}
+
+	text += "\n💡 Используйте /bankinfo <название> для просмотра кэшбэков банка"
+
+	return text
+}
+
+// formatUserInfo форматирует информацию о кэшбэках пользователя.
+func formatUserInfo(rules []models.CashbackRule) string {
+	if len(rules) == 0 {
+		return "📝 Нет кэшбэков"
+	}
+
+	userName := rules[0].UserDisplayName
+	text := fmt.Sprintf("👤 Кэшбэки пользователя %s (%d):\n\n", userName, len(rules))
+
+	for i, rule := range rules {
+		text += fmt.Sprintf(
+			"%d. %s - %s\n"+
+				"   %.1f%% до %.0f₽ (до %s)\n"+
+				"   ID: %d\n\n",
+			i+1,
+			rule.BankName,
+			rule.Category,
+			rule.CashbackPercent,
+			rule.MaxAmount,
+			rule.MonthYear.Format("02.01.2006"),
+			rule.ID,
+		)
+	}
+
+	return text
+}
+
 // formatUpdatePrompt форматирует запрос на обновление с текущей строкой для копирования.
 func formatUpdatePrompt(rule *models.CashbackRule) string {
 	// Формируем строку в формате ввода для удобного копирования

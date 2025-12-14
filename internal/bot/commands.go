@@ -267,3 +267,129 @@ func (b *Bot) handleCancel(message *tgbotapi.Message) {
 	b.sendText(message.Chat.ID, "🚫 Операция отменена")
 }
 
+// handleBankInfo обрабатывает команду /bankinfo bank_name.
+func (b *Bot) handleBankInfo(message *tgbotapi.Message) {
+	args := strings.TrimPrefix(message.Text, "/bankinfo")
+	args = strings.TrimSpace(args)
+
+	if args == "" {
+		b.sendText(message.Chat.ID, "❌ Укажите название банка.\n\nПример: /bankinfo Тинькофф")
+		return
+	}
+
+	userIDStr := strconv.FormatInt(message.From.ID, 10)
+	groupName, err := b.client.GetUserGroup(userIDStr)
+	if err != nil {
+		b.sendText(message.Chat.ID, "❌ Вы должны быть в группе. Используйте /creategroup или /joingroup")
+		return
+	}
+
+	// Попытка найти похожий банк
+	correctedBank, found := FindSimilarBank(args)
+	bankToSearch := args
+	if found && correctedBank != args {
+		bankToSearch = correctedBank
+	}
+
+	rules, err := b.client.GetCashbackByBank(groupName, bankToSearch)
+	if err != nil {
+		b.sendText(message.Chat.ID, fmt.Sprintf("❌ Кэшбэки для банка \"%s\" не найдены.\n\n"+
+			"💡 Используйте /banklist для просмотра доступных банков.", args))
+		return
+	}
+
+	b.sendText(message.Chat.ID, formatBankInfo(bankToSearch, rules))
+}
+
+// handleCategoryList обрабатывает команду /categorylist.
+func (b *Bot) handleCategoryList(message *tgbotapi.Message) {
+	userIDStr := strconv.FormatInt(message.From.ID, 10)
+	groupName, err := b.client.GetUserGroup(userIDStr)
+	if err != nil {
+		b.sendText(message.Chat.ID, "❌ Вы должны быть в группе. Используйте /creategroup или /joingroup")
+		return
+	}
+
+	categories, err := b.client.GetActiveCategories(groupName)
+	if err != nil {
+		b.sendText(message.Chat.ID, "❌ Ошибка получения категорий")
+		return
+	}
+
+	if len(categories) == 0 {
+		b.sendText(message.Chat.ID, "📝 Пока нет активных категорий в группе.")
+		return
+	}
+
+	b.sendText(message.Chat.ID, formatCategoryList(categories))
+}
+
+// handleBankList обрабатывает команду /banklist.
+func (b *Bot) handleBankList(message *tgbotapi.Message) {
+	userIDStr := strconv.FormatInt(message.From.ID, 10)
+	groupName, err := b.client.GetUserGroup(userIDStr)
+	if err != nil {
+		b.sendText(message.Chat.ID, "❌ Вы должны быть в группе. Используйте /creategroup или /joingroup")
+		return
+	}
+
+	banks, err := b.client.GetActiveBanks(groupName)
+	if err != nil {
+		b.sendText(message.Chat.ID, "❌ Ошибка получения банков")
+		return
+	}
+
+	if len(banks) == 0 {
+		b.sendText(message.Chat.ID, "📝 Пока нет активных банков в группе.")
+		return
+	}
+
+	b.sendText(message.Chat.ID, formatBankList(banks))
+}
+
+// handleUserInfo обрабатывает команду /userinfo [ID].
+func (b *Bot) handleUserInfo(message *tgbotapi.Message) {
+	userIDStr := strconv.FormatInt(message.From.ID, 10)
+	groupName, err := b.client.GetUserGroup(userIDStr)
+	if err != nil {
+		b.sendText(message.Chat.ID, "❌ Вы должны быть в группе. Используйте /creategroup или /joingroup")
+		return
+	}
+
+	// Парсим аргументы
+	args := strings.TrimPrefix(message.Text, "/userinfo")
+	args = strings.TrimSpace(args)
+
+	targetUserID := userIDStr
+	if args != "" {
+		// Указан ID другого пользователя
+		targetUserID = args
+	}
+
+	// Получаем все кэшбэки группы
+	list, err := b.client.ListCashback(groupName, 1000, 0)
+	if err != nil {
+		b.sendText(message.Chat.ID, "❌ Ошибка получения данных")
+		return
+	}
+
+	// Фильтруем по пользователю
+	var userRules []models.CashbackRule
+	for _, rule := range list.Rules {
+		if rule.UserID == targetUserID {
+			userRules = append(userRules, rule)
+		}
+	}
+
+	if len(userRules) == 0 {
+		if targetUserID == userIDStr {
+			b.sendText(message.Chat.ID, "📝 У вас пока нет кэшбэков.")
+		} else {
+			b.sendText(message.Chat.ID, fmt.Sprintf("📝 У пользователя %s пока нет кэшбэков.", targetUserID))
+		}
+		return
+	}
+
+	b.sendText(message.Chat.ID, formatUserInfo(userRules))
+}
+

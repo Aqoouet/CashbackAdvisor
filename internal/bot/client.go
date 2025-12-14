@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"time"
 
 	"github.com/rymax1e/open-cashback-advisor/internal/models"
 )
@@ -236,6 +237,81 @@ func (c *APIClient) ListAllCategories(groupName, monthYear string) ([]string, er
 	}
 
 	return categories, nil
+}
+
+// GetCashbackByBank получает все кэшбэки по банку в группе.
+func (c *APIClient) GetCashbackByBank(groupName, bankName string) ([]models.CashbackRule, error) {
+	// Получаем все кэшбэки группы
+	list, err := c.ListCashback(groupName, MaxListLimit, 0)
+	if err != nil {
+		return nil, err
+	}
+
+	// Фильтруем по банку и активности
+	var filtered []models.CashbackRule
+	now := time.Now()
+	
+	for _, rule := range list.Rules {
+		if rule.BankName == bankName && rule.MonthYear.After(now.AddDate(0, 0, -1)) {
+			filtered = append(filtered, rule)
+		}
+	}
+
+	if len(filtered) == 0 {
+		return nil, fmt.Errorf("кэшбэки для банка '%s' не найдены", bankName)
+	}
+
+	return filtered, nil
+}
+
+// GetActiveCategories получает список всех активных категорий в группе.
+func (c *APIClient) GetActiveCategories(groupName string) ([]string, error) {
+	list, err := c.ListCashback(groupName, MaxListLimit, 0)
+	if err != nil {
+		return nil, err
+	}
+
+	// Собираем уникальные активные категории
+	categorySet := make(map[string]struct{})
+	now := time.Now()
+	
+	for _, rule := range list.Rules {
+		if rule.MonthYear.After(now.AddDate(0, 0, -1)) {
+			categorySet[rule.Category] = struct{}{}
+		}
+	}
+
+	categories := make([]string, 0, len(categorySet))
+	for cat := range categorySet {
+		categories = append(categories, cat)
+	}
+
+	return categories, nil
+}
+
+// GetActiveBanks получает список всех активных банков в группе.
+func (c *APIClient) GetActiveBanks(groupName string) ([]string, error) {
+	list, err := c.ListCashback(groupName, MaxListLimit, 0)
+	if err != nil {
+		return nil, err
+	}
+
+	// Собираем уникальные активные банки
+	bankSet := make(map[string]struct{})
+	now := time.Now()
+	
+	for _, rule := range list.Rules {
+		if rule.MonthYear.After(now.AddDate(0, 0, -1)) {
+			bankSet[rule.BankName] = struct{}{}
+		}
+	}
+
+	banks := make([]string, 0, len(bankSet))
+	for bank := range bankSet {
+		banks = append(banks, bank)
+	}
+
+	return banks, nil
 }
 
 // --- Методы для работы с группами ---

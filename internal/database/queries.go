@@ -92,6 +92,31 @@ const (
 
 	// QueryGetAllGroups — получение всех групп.
 	QueryGetAllGroups = `SELECT group_name FROM groups ORDER BY created_at DESC`
+
+	// QueryGetCashbackByBank — получение кэшбэков по банку в группе.
+	QueryGetCashbackByBank = `
+		SELECT cr.id, cr.group_name, cr.category, cr.bank_name, cr.user_id, cr.user_display_name,
+			   cr.month_year, cr.cashback_percent, cr.max_amount, cr.created_at, cr.updated_at
+		FROM cashback_rules cr
+		INNER JOIN user_groups ug ON cr.user_id = ug.user_id
+		WHERE ug.group_name = $1 AND cr.bank_name = $2 AND cr.month_year >= $3
+		ORDER BY cr.cashback_percent DESC, cr.max_amount DESC`
+
+	// QueryGetActiveCategories — получение уникальных активных категорий.
+	QueryGetActiveCategories = `
+		SELECT DISTINCT cr.category
+		FROM cashback_rules cr
+		INNER JOIN user_groups ug ON cr.user_id = ug.user_id
+		WHERE ug.group_name = $1 AND cr.month_year >= $2
+		ORDER BY cr.category`
+
+	// QueryGetActiveBanks — получение уникальных активных банков.
+	QueryGetActiveBanks = `
+		SELECT DISTINCT cr.bank_name
+		FROM cashback_rules cr
+		INNER JOIN user_groups ug ON cr.user_id = ug.user_id
+		WHERE ug.group_name = $1 AND cr.month_year >= $2
+		ORDER BY cr.bank_name`
 )
 
 // Поля для fuzzy поиска.

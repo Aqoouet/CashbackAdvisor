@@ -270,6 +270,66 @@ func (r *Repository) GetAllGroups(ctx context.Context) ([]string, error) {
 	return groups, nil
 }
 
+// GetCashbackByBank получает все кэшбэки по банку в группе.
+func (r *Repository) GetCashbackByBank(ctx context.Context, groupName, bankName string, monthYear time.Time) ([]models.CashbackRule, error) {
+	rows, err := r.db.Pool.Query(ctx, QueryGetCashbackByBank, groupName, bankName, monthYear)
+	if err != nil {
+		return nil, fmt.Errorf("получение кэшбэков по банку: %w", err)
+	}
+	defer rows.Close()
+
+	rules, err := r.scanCashbackRules(rows)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(rules) == 0 {
+		return nil, fmt.Errorf("кэшбэки для банка '%s': %w", bankName, ErrNotFound)
+	}
+
+	return rules, nil
+}
+
+// GetActiveCategories возвращает список активных категорий в группе.
+func (r *Repository) GetActiveCategories(ctx context.Context, groupName string, monthYear time.Time) ([]string, error) {
+	rows, err := r.db.Pool.Query(ctx, QueryGetActiveCategories, groupName, monthYear)
+	if err != nil {
+		return nil, fmt.Errorf("получение активных категорий: %w", err)
+	}
+	defer rows.Close()
+
+	var categories []string
+	for rows.Next() {
+		var category string
+		if err := rows.Scan(&category); err != nil {
+			return nil, fmt.Errorf("чтение категории: %w", err)
+		}
+		categories = append(categories, category)
+	}
+
+	return categories, nil
+}
+
+// GetActiveBanks возвращает список активных банков в группе.
+func (r *Repository) GetActiveBanks(ctx context.Context, groupName string, monthYear time.Time) ([]string, error) {
+	rows, err := r.db.Pool.Query(ctx, QueryGetActiveBanks, groupName, monthYear)
+	if err != nil {
+		return nil, fmt.Errorf("получение активных банков: %w", err)
+	}
+	defer rows.Close()
+
+	var banks []string
+	for rows.Next() {
+		var bank string
+		if err := rows.Scan(&bank); err != nil {
+			return nil, fmt.Errorf("чтение банка: %w", err)
+		}
+		banks = append(banks, bank)
+	}
+
+	return banks, nil
+}
+
 // --- Вспомогательные методы ---
 
 // scanCashbackRule сканирует одно правило из запроса.

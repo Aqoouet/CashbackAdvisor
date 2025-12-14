@@ -39,6 +39,11 @@ type RepositoryInterface interface {
 	GroupExists(ctx context.Context, groupName string) (bool, error)
 	GetGroupMembers(ctx context.Context, groupName string) ([]string, error)
 	GetAllGroups(ctx context.Context) ([]string, error)
+
+	// Дополнительные методы
+	GetCashbackByBank(ctx context.Context, groupName, bankName string, monthYear time.Time) ([]models.CashbackRule, error)
+	GetActiveCategories(ctx context.Context, groupName string, monthYear time.Time) ([]string, error)
+	GetActiveBanks(ctx context.Context, groupName string, monthYear time.Time) ([]string, error)
 }
 
 // Проверка реализации интерфейса.
