@@ -55,8 +55,16 @@ func (b *Bot) handleBankCorrection(message *tgbotapi.Message, state *UserState) 
 	text := strings.ToLower(strings.TrimSpace(message.Text))
 	userID := message.From.ID
 
-	// Если state.Data.Category содержит groupName - это запрос из /bankinfo
-	if state.Data != nil && state.Data.Category != "" && state.Data.BankName != "" {
+	// Проверяем, это запрос из /bankinfo или из /add
+	// Для /bankinfo: есть BankName и Category (groupName), но НЕТ CashbackPercent и MaxAmount
+	// Для /add: есть все поля включая CashbackPercent и MaxAmount
+	isBankInfoContext := state.Data != nil && 
+		state.Data.BankName != "" && 
+		state.Data.Category != "" &&
+		state.Data.CashbackPercent == 0 && 
+		state.Data.MaxAmount == 0
+	
+	if isBankInfoContext {
 		groupName := state.Data.Category // Временно сохранили название группы в поле Category
 		bankName := state.Data.BankName
 		
