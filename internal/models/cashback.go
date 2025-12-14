@@ -104,3 +104,10 @@ type ErrorResponse struct {
 	Details []string `json:"details,omitempty"`
 }
 
+// UserInfo представляет информацию о пользователе
+type UserInfo struct {
+	UserID          string `json:"user_id"`
+	UserDisplayName string `json:"user_display_name"`
+	GroupName       string `json:"group_name"`
+}
+

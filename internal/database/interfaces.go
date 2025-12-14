@@ -44,6 +44,7 @@ type RepositoryInterface interface {
 	GetCashbackByBank(ctx context.Context, groupName, bankName string, monthYear time.Time) ([]models.CashbackRule, error)
 	GetActiveCategories(ctx context.Context, groupName string, monthYear time.Time) ([]string, error)
 	GetActiveBanks(ctx context.Context, groupName string, monthYear time.Time) ([]string, error)
+	GetGroupUsers(ctx context.Context, groupName string) ([]models.UserInfo, error)
 }
 
 // Проверка реализации интерфейса.

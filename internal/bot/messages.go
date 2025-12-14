@@ -352,6 +352,42 @@ func formatUserInfo(rules []models.CashbackRule) string {
 	return text
 }
 
+// formatUserListTable форматирует список пользователей в табличном виде.
+func formatUserListTable(users []models.UserInfo, total int) string {
+	if len(users) == 0 {
+		return "📝 Нет пользователей"
+	}
+
+	text := fmt.Sprintf("👥 Пользователи группы \"%s\" (показано %d из %d):\n\n", 
+		users[0].GroupName, len(users), total)
+	
+	text += "<pre>"
+	text += "№  | Имя                    | ID              \n"
+	text += "---+------------------------+-----------------\n"
+	
+	for i, user := range users {
+		name := truncateString(user.UserDisplayName, 22)
+		userID := truncateString(user.UserID, 15)
+		
+		text += fmt.Sprintf(
+			"%-3d| %-22s | %-15s\n",
+			i+1,
+			name,
+			userID,
+		)
+	}
+	
+	text += "</pre>\n\n"
+	
+	if len(users) < total {
+		text += "💡 Используйте:\n"
+		text += "• /userlist - все пользователи\n"
+		text += "• /userlist 1-10 - с 1 по 10"
+	}
+
+	return text
+}
+
 // formatUpdatePrompt форматирует запрос на обновление с текущей строкой для копирования.
 func formatUpdatePrompt(rule *models.CashbackRule) string {
 	// Формируем строку в формате ввода для удобного копирования

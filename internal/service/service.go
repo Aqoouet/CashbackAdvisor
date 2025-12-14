@@ -340,3 +340,12 @@ func (s *Service) GetActiveBanks(ctx context.Context, groupName string) ([]strin
 	now := time.Now()
 	return s.repo.GetActiveBanks(ctx, groupName, now)
 }
+
+// GetGroupUsers возвращает список пользователей группы.
+func (s *Service) GetGroupUsers(ctx context.Context, groupName string) ([]models.UserInfo, error) {
+	if err := validator.ValidateTextField("group_name", groupName, true); err != nil {
+		return nil, err
+	}
+
+	return s.repo.GetGroupUsers(ctx, groupName)
+}

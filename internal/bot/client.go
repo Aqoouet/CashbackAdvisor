@@ -314,6 +314,34 @@ func (c *APIClient) GetActiveBanks(groupName string) ([]string, error) {
 	return banks, nil
 }
 
+// GetGroupUsers получает список пользователей группы.
+func (c *APIClient) GetGroupUsers(groupName string) ([]models.UserInfo, error) {
+	list, err := c.ListCashback(groupName, MaxListLimit, 0)
+	if err != nil {
+		return nil, err
+	}
+
+	// Собираем уникальных пользователей
+	userMap := make(map[string]models.UserInfo)
+	
+	for _, rule := range list.Rules {
+		if _, exists := userMap[rule.UserID]; !exists {
+			userMap[rule.UserID] = models.UserInfo{
+				UserID:          rule.UserID,
+				UserDisplayName: rule.UserDisplayName,
+				GroupName:       rule.GroupName,
+			}
+		}
+	}
+
+	users := make([]models.UserInfo, 0, len(userMap))
+	for _, user := range userMap {
+		users = append(users, user)
+	}
+
+	return users, nil
+}
+
 // --- Методы для работы с группами ---
 
 // GetUserGroup получает группу пользователя.

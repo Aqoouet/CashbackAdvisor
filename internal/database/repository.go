@@ -330,6 +330,26 @@ func (r *Repository) GetActiveBanks(ctx context.Context, groupName string, month
 	return banks, nil
 }
 
+// GetGroupUsers возвращает список пользователей группы.
+func (r *Repository) GetGroupUsers(ctx context.Context, groupName string) ([]models.UserInfo, error) {
+	rows, err := r.db.Pool.Query(ctx, QueryGetGroupUsers, groupName)
+	if err != nil {
+		return nil, fmt.Errorf("получение пользователей группы: %w", err)
+	}
+	defer rows.Close()
+
+	var users []models.UserInfo
+	for rows.Next() {
+		var user models.UserInfo
+		if err := rows.Scan(&user.UserID, &user.UserDisplayName, &user.GroupName); err != nil {
+			return nil, fmt.Errorf("чтение пользователя: %w", err)
+		}
+		users = append(users, user)
+	}
+
+	return users, nil
+}
+
 // --- Вспомогательные методы ---
 
 // scanCashbackRule сканирует одно правило из запроса.

@@ -145,6 +145,7 @@ func filterWords(s string) []string {
 
 // scoreCategory считает похожесть категории: порядок слов не важен, берём
 // для каждого слова запроса лучшее совпадение по словам категории и усредняем.
+// Улучшенная версия с бонусами за точные совпадения и вхождения.
 func scoreCategory(inputWords []string, category string) (float64, int) {
 	catLower := strings.ToLower(category)
 	catWords := filterWords(catLower)
@@ -154,24 +155,65 @@ func scoreCategory(inputWords []string, category string) (float64, int) {
 
 	totalSim := 0.0
 	totalDist := 0
+	exactMatches := 0
 
 	for _, iw := range inputWords {
 		bestSim := 0.0
 		bestDist := len(iw) + len(catLower) // заведомо худшее
-		for _, cw := range catWords {
-			s := similarity(iw, cw)
-			d := levenshteinDistance(iw, cw)
-			if s > bestSim || (s == bestSim && d < bestDist) {
-				bestSim = s
-				bestDist = d
+		hasExactMatch := false
+		
+		// Проверяем точное вхождение подстроки в категорию
+		if strings.Contains(catLower, strings.ToLower(iw)) {
+			// Бонус за точное вхождение
+			bestSim = 95.0
+			bestDist = 0
+			hasExactMatch = true
+		} else {
+			// Ищем лучшее совпадение среди слов категории
+			for _, cw := range catWords {
+				// Проверяем точное совпадение слов
+				if strings.ToLower(iw) == strings.ToLower(cw) {
+					bestSim = 100.0
+					bestDist = 0
+					hasExactMatch = true
+					break
+				}
+				
+				// Проверяем начинается ли слово категории с слова запроса
+				if strings.HasPrefix(strings.ToLower(cw), strings.ToLower(iw)) {
+					s := 90.0 // Бонус за совпадение префикса
+					d := len(cw) - len(iw)
+					if s > bestSim || (s == bestSim && d < bestDist) {
+						bestSim = s
+						bestDist = d
+					}
+				} else {
+					// Обычное сравнение по Левенштейну
+					s := similarity(iw, cw)
+					d := levenshteinDistance(iw, cw)
+					if s > bestSim || (s == bestSim && d < bestDist) {
+						bestSim = s
+						bestDist = d
+					}
+				}
 			}
 		}
+		
+		if hasExactMatch {
+			exactMatches++
+		}
+		
 		totalSim += bestSim
 		totalDist += bestDist
 	}
 
 	avgSim := totalSim / float64(len(inputWords))
 	avgDist := int(math.Round(float64(totalDist) / float64(len(inputWords))))
+	
+	// Бонус, если все слова запроса точно совпали
+	if exactMatches == len(inputWords) && len(inputWords) > 0 {
+		avgSim = math.Min(100.0, avgSim+5.0)
+	}
 
 	return avgSim, avgDist
 }

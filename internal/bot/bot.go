@@ -143,6 +143,8 @@ func (b *Bot) routeCommand(message *tgbotapi.Message) {
 		b.handleBankList(message)
 	case "userinfo":
 		b.handleUserInfo(message)
+	case "userlist":
+		b.handleUserList(message)
 	case "cancel":
 		b.handleCancel(message)
 	default:

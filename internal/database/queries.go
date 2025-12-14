@@ -117,6 +117,14 @@ const (
 		INNER JOIN user_groups ug ON cr.user_id = ug.user_id
 		WHERE ug.group_name = $1 AND cr.month_year >= $2
 		ORDER BY cr.bank_name`
+
+	// QueryGetGroupUsers — получение пользователей группы с их данными.
+	QueryGetGroupUsers = `
+		SELECT DISTINCT cr.user_id, cr.user_display_name, ug.group_name
+		FROM cashback_rules cr
+		INNER JOIN user_groups ug ON cr.user_id = ug.user_id
+		WHERE ug.group_name = $1
+		ORDER BY cr.user_display_name`
 )
 
 // Поля для fuzzy поиска.
