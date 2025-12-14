@@ -320,8 +320,14 @@ func (b *Bot) trySuggestSimilarCategory(message *tgbotapi.Message, category, gro
 	// В этом случае НЕ выполняем поиск снова (чтобы избежать бесконечного цикла)
 	// Вместо этого сразу пробуем fallback на "Все покупки"
 	if simPercent == 100.0 && strings.EqualFold(category, similar) {
-		log.Printf("⚠️ Категория '%s' существует, но все кешбеки истекли. Пропускаю повторный поиск.", category)
-		// Логика fallback уже выполнена в handleBestQueryWithCorrection, просто показываем "не найдено"
+		log.Printf("⚠️ Категория '%s' существует, но все кешбеки истекли. Пробуем 'Все покупки'", category)
+		allPurchasesRules, errAll := b.getAllCashbacksByCategory(groupName, "Все покупки", monthYear)
+		if errAll == nil && len(allPurchasesRules) > 0 {
+			log.Printf("✅ Найдено %d кешбеков для 'Все покупки' как fallback", len(allPurchasesRules))
+			b.sendText(message.Chat.ID, formatAllCashbackResults(allPurchasesRules, category, true))
+			return
+		}
+		log.Printf("❌ 'Все покупки' тоже не найдены, показываю 'не найдено'")
 		b.sendText(message.Chat.ID, formatNotFoundMessage(category, monthYear))
 		return
 	}
