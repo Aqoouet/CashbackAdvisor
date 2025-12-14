@@ -283,7 +283,7 @@ func (b *Bot) handleBestQueryWithCorrection(message *tgbotapi.Message, category 
 		return
 	}
 	
-	// Не нашли точную категорию (или все кешбеки истекли) - пробуем "Все покупки"
+	// Не нашли активные кешбеки - пробуем "Все покупки" как fallback
 	log.Printf("⚠️ Не найдено активных кешбеков для '%s' (err: %v), пробуем 'Все покупки'", category, err)
 	allPurchasesRules, errAll := b.getAllCashbacksByCategory(groupName, "Все покупки", monthYear)
 	if errAll == nil && len(allPurchasesRules) > 0 {
@@ -292,12 +292,10 @@ func (b *Bot) handleBestQueryWithCorrection(message *tgbotapi.Message, category 
 		return
 	}
 	
-	// Ничего не нашли - пробуем похожие категории
-	if !skipSuggestion {
-		b.trySuggestSimilarCategory(message, category, groupName, monthYear)
-	} else {
-		b.sendText(message.Chat.ID, formatNotFoundMessage(category, monthYear))
-	}
+	// "Все покупки" тоже не найдены - показываем сообщение "не найдено"
+	// НЕ пробуем похожие категории, чтобы избежать бесконечного цикла
+	log.Printf("❌ 'Все покупки' тоже не найдены, показываю 'не найдено'")
+	b.sendText(message.Chat.ID, formatNotFoundMessage(category, monthYear))
 }
 
 // trySuggestSimilarCategory пытается найти похожую категорию.
@@ -314,10 +312,13 @@ func (b *Bot) trySuggestSimilarCategory(message *tgbotapi.Message, category, gro
 	log.Printf("🔍 Сравнение: '%s' → '%s' (расстояние: %d, похожесть: %.1f%%)",
 		category, similar, distance, simPercent)
 
-	// Если это точное совпадение (100%), не предлагаем исправление, а выполняем поиск
+	// Если это точное совпадение (100%), значит категория существует, но все кешбеки истекли
+	// В этом случае НЕ выполняем поиск снова (чтобы избежать бесконечного цикла)
+	// Вместо этого сразу пробуем fallback на "Все покупки"
 	if simPercent == 100.0 && strings.EqualFold(category, similar) {
-		log.Printf("✅ Найдено точное совпадение, выполняю поиск без исправления")
-		b.handleBestQueryWithCorrection(message, similar, true)
+		log.Printf("⚠️ Категория '%s' существует, но все кешбеки истекли. Пропускаю повторный поиск.", category)
+		// Логика fallback уже выполнена в handleBestQueryWithCorrection, просто показываем "не найдено"
+		b.sendText(message.Chat.ID, formatNotFoundMessage(category, monthYear))
 		return
 	}
 

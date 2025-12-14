@@ -140,17 +140,17 @@ func (b *Bot) handleUpdateData(message *tgbotapi.Message, state *UserState) {
 	}
 
 	text := fmt.Sprintf(
-		"✅ %% кешбек обновлён!\n\n"+
+		"✅ Кешбек обновлён!\n\n"+
 			"🆔 ID: %d\n"+
 			"🏦 Банк: %s\n"+
 			"📁 Категория: %s\n"+
-			"📅 Месяц: %s\n"+
+			"📅 До: %s\n"+
 			"💰 Кэшбэк: %.1f%%\n"+
 			"💵 Макс. сумма: %.0f₽",
 		rule.ID,
 		rule.BankName,
 		rule.Category,
-		rule.MonthYear.Format("2006-01"),
+		rule.MonthYear.Format("02.01.2006"),
 		rule.CashbackPercent,
 		rule.MaxAmount,
 	)
