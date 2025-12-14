@@ -31,6 +31,14 @@ func (b *Bot) handleConfirmation(message *tgbotapi.Message, state *UserState) {
 		// Сохраняем как есть
 		b.saveCashback(message.Chat.ID, message.From, state.Data, true)
 
+	case isManualEditAnswer(text):
+		// Переход в режим ручного ввода
+		b.setState(userID, StateAwaitingManualInput, state.Data, state.Suggestion, 0)
+		b.sendText(message.Chat.ID, "✏️ Отправьте данные в формате:\n"+
+			"Банк, Категория, Процент, Сумма[, Дата окончания]\n\n"+
+			"Или /cancel для отмены.")
+		return
+
 	case isCancelAnswer(text):
 		b.sendText(message.Chat.ID, "🚫 Операция отменена")
 
@@ -45,14 +53,24 @@ func (b *Bot) handleConfirmation(message *tgbotapi.Message, state *UserState) {
 // handleBankCorrection обрабатывает подтверждение исправления банка.
 func (b *Bot) handleBankCorrection(message *tgbotapi.Message, state *UserState) {
 	text := strings.ToLower(strings.TrimSpace(message.Text))
+	userID := message.From.ID
 
-	if isYesAnswer(text) {
+	switch {
+	case isYesAnswer(text):
 		log.Printf("✅ Пользователь подтвердил исправление банка: %s", state.Data.BankName)
 		b.continueWithValidation(message, state.Data)
-	} else {
+		
+	case isManualEditAnswer(text):
+		// Переход в режим ручного ввода
+		b.setState(userID, StateAwaitingManualInput, state.Data, nil, 0)
+		b.sendText(message.Chat.ID, "✏️ Отправьте данные в формате:\n"+
+			"Банк, Категория, Процент, Сумма[, Дата окончания]\n\n"+
+			"Или /cancel для отмены.")
+		
+	default:
 		log.Printf("❌ Пользователь отклонил исправление банка")
 		b.sendText(message.Chat.ID, "Хорошо, оставляю как есть.")
-		b.clearState(message.From.ID)
+		b.clearState(userID)
 		b.sendText(message.Chat.ID, "Отправьте данные заново, если хотите продолжить.")
 	}
 }
@@ -60,15 +78,24 @@ func (b *Bot) handleBankCorrection(message *tgbotapi.Message, state *UserState) 
 // handleCategoryCorrection обрабатывает подтверждение исправления категории при поиске.
 func (b *Bot) handleCategoryCorrection(message *tgbotapi.Message, state *UserState) {
 	text := strings.ToLower(strings.TrimSpace(message.Text))
+	userID := message.From.ID
 
-	if isYesAnswer(text) {
+	switch {
+	case isYesAnswer(text):
 		correctedCategory := state.Data.Category
 		log.Printf("✅ Пользователь подтвердил исправление категории: %s", correctedCategory)
-		b.clearState(message.From.ID)
+		b.clearState(userID)
 		b.handleBestQueryWithCorrection(message, correctedCategory, true)
-	} else {
+		
+	case isManualEditAnswer(text):
+		// Переход в режим ручного ввода для поиска
+		b.clearState(userID)
+		b.sendText(message.Chat.ID, "✏️ Введите название категории для поиска:\n\n"+
+			"Или /cancel для отмены.")
+		
+	default:
 		log.Printf("❌ Пользователь отклонил исправление категории")
-		b.clearState(message.From.ID)
+		b.clearState(userID)
 		b.sendText(message.Chat.ID, "Хорошо, попробуйте ввести название категории по-другому.")
 	}
 }
@@ -172,5 +199,37 @@ func isCancelAnswer(text string) bool {
 func isDeleteConfirm(text string) bool {
 	return strings.Contains(text, "да") ||
 		strings.Contains(text, "удалить")
+}
+
+// isManualEditAnswer проверяет, хочет ли пользователь ввести вручную.
+func isManualEditAnswer(text string) bool {
+	return strings.Contains(text, "изменить вручную") ||
+		strings.Contains(text, "✏️")
+}
+
+// handleManualInput обрабатывает ручной ввод данных.
+func (b *Bot) handleManualInput(message *tgbotapi.Message, state *UserState) {
+	// Парсим новые данные
+	data, err := ParseMessage(message.Text)
+	if err != nil {
+		b.sendText(message.Chat.ID, fmt.Sprintf("❌ Ошибка парсинга: %s", err))
+		return
+	}
+
+	// Проверяем полноту данных
+	missing := ValidateParsedData(data)
+	if len(missing) > 0 {
+		text := "⚠️ Не хватает данных:\n" + strings.Join(missing, ", ") + "\n\n" +
+			"Формат: Банк, Категория, Процент, Сумма[, Дата окончания]"
+		b.sendText(message.Chat.ID, text)
+		return
+	}
+
+	log.Printf("✅ Ручной ввод: Bank='%s', Category='%s', Percent=%.1f%%, Amount=%.0f",
+		data.BankName, data.Category, data.CashbackPercent, data.MaxAmount)
+
+	// Сохраняем без дополнительной валидации
+	b.saveCashback(message.Chat.ID, message.From, data, true)
+	b.clearState(message.From.ID)
 }
 

@@ -16,21 +16,23 @@ type UserStateType string
 
 // Константы состояний пользователя.
 const (
-	StateNone                   UserStateType = ""
-	StateAwaitingConfirmation   UserStateType = "awaiting_confirmation"
-	StateAwaitingBankCorrection UserStateType = "awaiting_bank_correction"
+	StateNone                     UserStateType = ""
+	StateAwaitingConfirmation     UserStateType = "awaiting_confirmation"
+	StateAwaitingBankCorrection   UserStateType = "awaiting_bank_correction"
 	StateAwaitingCategoryCorrection UserStateType = "awaiting_category_correction"
-	StateAwaitingUpdateData     UserStateType = "awaiting_update_data"
-	StateAwaitingDeleteConfirm  UserStateType = "awaiting_delete_confirmation"
-	StateAwaitingGroupName      UserStateType = "awaiting_group_name"
+	StateAwaitingUpdateData       UserStateType = "awaiting_update_data"
+	StateAwaitingDeleteConfirm    UserStateType = "awaiting_delete_confirmation"
+	StateAwaitingGroupName        UserStateType = "awaiting_group_name"
+	StateAwaitingManualInput      UserStateType = "awaiting_manual_input"
 )
 
 // UserState хранит состояние диалога с пользователем.
 type UserState struct {
-	State      UserStateType
-	Data       *ParsedData
-	Suggestion *models.SuggestResponse
-	RuleID     int64
+	State       UserStateType
+	Data        *ParsedData
+	Suggestion  *models.SuggestResponse
+	RuleID      int64
+	KeyboardPage int // Текущая страница клавиатуры
 }
 
 // Bot представляет Telegram бота для работы с кэшбэком.
@@ -84,6 +86,11 @@ func (b *Bot) handleMessage(message *tgbotapi.Message) {
 	// Обработка команд
 	if message.IsCommand() {
 		b.routeCommand(message)
+		return
+	}
+
+	// Обработка кнопок навигации
+	if b.handleNavigationButtons(message) {
 		return
 	}
 
@@ -179,6 +186,8 @@ func (b *Bot) handleUserState(message *tgbotapi.Message) bool {
 		b.handleDeleteConfirmation(message, state)
 	case StateAwaitingGroupName:
 		b.handleGroupNameInput(message)
+	case StateAwaitingManualInput:
+		b.handleManualInput(message, state)
 	default:
 		return false
 	}
@@ -228,5 +237,60 @@ func getUserDisplayName(user *tgbotapi.User) string {
 		return user.UserName
 	}
 	return fmt.Sprintf("User%d", user.ID)
+}
+
+// handleNavigationButtons обрабатывает нажатие на кнопки навигации.
+func (b *Bot) handleNavigationButtons(message *tgbotapi.Message) bool {
+	userID := message.From.ID
+	
+	// Получаем текущую страницу
+	state, exists := b.userStates[userID]
+	currentPage := 0
+	if exists {
+		currentPage = state.KeyboardPage
+	}
+	
+	// Обрабатываем навигацию
+	switch message.Text {
+	case BtnNavPrev:
+		if currentPage > 0 {
+			currentPage--
+		}
+		b.setKeyboardPage(userID, currentPage)
+		b.sendTextWithPage(message.Chat.ID, "◀️ Предыдущая страница", currentPage)
+		return true
+		
+	case BtnNavNext:
+		currentPage++
+		b.setKeyboardPage(userID, currentPage)
+		b.sendTextWithPage(message.Chat.ID, "▶️ Следующая страница", currentPage)
+		return true
+	}
+	
+	return false
+}
+
+// setKeyboardPage устанавливает текущую страницу клавиатуры для пользователя.
+func (b *Bot) setKeyboardPage(userID int64, page int) {
+	state, exists := b.userStates[userID]
+	if !exists {
+		state = &UserState{}
+		b.userStates[userID] = state
+	}
+	state.KeyboardPage = page
+}
+
+// sendTextWithPage отправляет сообщение с клавиатурой на указанной странице.
+func (b *Bot) sendTextWithPage(chatID int64, text string, page int) {
+	msg := tgbotapi.NewMessage(chatID, text)
+	msg.ParseMode = "HTML"
+
+	kb := tgbotapi.NewReplyKeyboard(buildKeyboardWithPage(nil, page)...)
+	kb.ResizeKeyboard = true
+	msg.ReplyMarkup = kb
+
+	if _, err := b.api.Send(msg); err != nil {
+		log.Printf("❌ Ошибка отправки сообщения: %v", err)
+	}
 }
 
