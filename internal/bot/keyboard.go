@@ -89,6 +89,8 @@ func getCommandPage(page int) [][]string {
 		if page > 0 {
 			navRow = append(navRow, BtnNavPrev)
 		}
+		// Добавляем кнопку /cancel посередине
+		navRow = append(navRow, "/cancel")
 		// Не добавляем индикатор, чтобы избежать распознавания как команды
 		if page < totalPages-1 {
 			navRow = append(navRow, BtnNavNext)

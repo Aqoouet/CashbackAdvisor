@@ -190,12 +190,14 @@ func formatAllCashbackResults(rules []models.CashbackRule, requestedCategory str
 		}
 		
 		text += fmt.Sprintf(
-			"%s%s\n"+
+			"%s🏦 %s\n"+
+				"   📁 %s\n"+
 				"   💰 %.1f%% до %.0f₽\n"+
 				"   📅 До %s\n"+
 				"   👤 %s\n\n",
 			medal,
 			rule.BankName,
+			rule.Category,
 			rule.CashbackPercent,
 			rule.MaxAmount,
 			rule.MonthYear.Format("02.01.2006"),
@@ -327,7 +329,7 @@ func formatBankList(banks []string) string {
 		text += fmt.Sprintf("%d. %s\n", i+1, bank)
 	}
 
-	text += "\n💡 Используйте /bankinfo <название> для просмотра кэшбэков банка"
+	text += "\n💡 Используйте /bankinfo [название] для просмотра кэшбэков банка"
 
 	return text
 }

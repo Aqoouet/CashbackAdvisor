@@ -367,12 +367,12 @@ func (b *Bot) handleList(message *tgbotapi.Message) {
 	if showAll {
 		filtered = list.Rules
 	} else if indices == nil {
-		// По умолчанию - последние 5
-		start := 0
-		if len(list.Rules) > 5 {
-			start = len(list.Rules) - 5
+		// По умолчанию - последние 5 (т.к. list.Rules уже отсортирован по created_at DESC)
+		limit := 5
+		if len(list.Rules) < limit {
+			limit = len(list.Rules)
 		}
-		filtered = list.Rules[start:]
+		filtered = list.Rules[:limit]
 	} else {
 		// Выбираем по индексам
 		for _, idx := range indices {
