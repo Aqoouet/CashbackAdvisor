@@ -14,7 +14,9 @@ import (
 func (b *Bot) handleCreateGroup(message *tgbotapi.Message) {
 	args := strings.Fields(message.Text)
 	if len(args) < 2 {
-		b.sendText(message.Chat.ID, "❌ Укажите название группы.\n\nПример: /creategroup Семья")
+		// Устанавливаем состояние ожидания названия группы
+		b.setState(message.From.ID, StateAwaitingCreateGroupName, nil, nil, 0)
+		b.sendText(message.Chat.ID, "👥 Введите название новой группы.\n\nПримеры:\n• Семья\n• Работа\n• Друзья\n\nИли /cancel для отмены.")
 		return
 	}
 
@@ -46,6 +48,8 @@ func (b *Bot) handleJoinGroup(message *tgbotapi.Message) {
 	userIDStr := strconv.FormatInt(message.From.ID, 10)
 
 	if len(args) < 2 {
+		// Устанавливаем состояние ожидания названия группы
+		b.setState(message.From.ID, StateAwaitingJoinGroupName, nil, nil, 0)
 		b.showAvailableGroups(message.Chat.ID)
 		return
 	}

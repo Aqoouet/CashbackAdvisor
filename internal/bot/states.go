@@ -372,3 +372,93 @@ func (b *Bot) handleDeleteIDInput(message *tgbotapi.Message) {
 	b.sendWithButtons(message.Chat.ID, text, ButtonsDelete)
 }
 
+// handleJoinGroupNameInput обрабатывает ввод названия группы для команды /joingroup.
+func (b *Bot) handleJoinGroupNameInput(message *tgbotapi.Message) {
+	userID := message.From.ID
+	groupName := strings.TrimSpace(message.Text)
+	
+	// Проверка на отмену
+	if isCancelAnswer(groupName) {
+		b.clearState(userID)
+		b.sendText(message.Chat.ID, "🚫 Операция отменена")
+		return
+	}
+	
+	// Очищаем состояние
+	b.clearState(userID)
+	
+	userIDStr := strconv.FormatInt(userID, 10)
+	
+	// Проверяем существование группы
+	if !b.client.GroupExists(groupName) {
+		b.sendText(message.Chat.ID, fmt.Sprintf(
+			"❌ Группа \"%s\" не существует.\n\nСоздайте её: /creategroup %s",
+			groupName, groupName,
+		))
+		return
+	}
+	
+	// Проверяем текущую группу пользователя
+	if currentGroup, err := b.client.GetUserGroup(userIDStr); err == nil {
+		if currentGroup == groupName {
+			b.sendText(message.Chat.ID, fmt.Sprintf("⚠️ Вы уже состоите в группе \"%s\"", groupName))
+			return
+		}
+		
+		log.Printf("👥 Пользователь @%s переключается из группы \"%s\" в группу \"%s\"",
+			message.From.UserName, currentGroup, groupName)
+	}
+	
+	// Добавляем пользователя в группу
+	err := b.client.SetUserGroup(userIDStr, groupName)
+	if err != nil {
+		b.sendText(message.Chat.ID, fmt.Sprintf("❌ %s", err))
+		return
+	}
+	
+	b.sendText(message.Chat.ID, fmt.Sprintf(
+		"✅ Вы присоединились к группе \"%s\"!\n\n"+
+			"Теперь вы можете:\n"+
+			"• Добавлять кэшбэк: /add\n"+
+			"• Искать лучший кэшбэк: /best\n"+
+			"• Смотреть список: /list",
+		groupName,
+	))
+}
+
+// handleCreateGroupNameInput обрабатывает ввод названия группы для команды /creategroup.
+func (b *Bot) handleCreateGroupNameInput(message *tgbotapi.Message) {
+	userID := message.From.ID
+	groupName := strings.TrimSpace(message.Text)
+	
+	// Проверка на отмену
+	if isCancelAnswer(groupName) {
+		b.clearState(userID)
+		b.sendText(message.Chat.ID, "🚫 Операция отменена")
+		return
+	}
+	
+	// Очищаем состояние
+	b.clearState(userID)
+	
+	userIDStr := strconv.FormatInt(userID, 10)
+	
+	// Проверяем, не состоит ли пользователь уже в группе
+	if currentGroup, err := b.client.GetUserGroup(userIDStr); err == nil {
+		b.sendText(message.Chat.ID, fmt.Sprintf("⚠️ Вы уже состоите в группе \"%s\"", currentGroup))
+		return
+	}
+	
+	// Создаём группу
+	err := b.client.CreateGroup(groupName, userIDStr)
+	if err != nil {
+		b.sendText(message.Chat.ID, fmt.Sprintf("❌ %s", err))
+		return
+	}
+	
+	b.sendText(message.Chat.ID, fmt.Sprintf(
+		"✅ Группа \"%s\" успешно создана!\n\nВы можете пригласить друзей командой:\n/joingroup %s",
+		groupName, groupName,
+	))
+}
+

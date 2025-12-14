@@ -42,6 +42,7 @@ var allCommands = []string{
 	"/start", "/help", "/add", "/best",
 	"/list", "/update", "/delete", "/bankinfo",
 	"/categorylist", "/banklist", "/userinfo", "/groupinfo",
+	"/joingroup", "/creategroup",
 }
 
 // getTotalCommandPages возвращает общее количество страниц команд.

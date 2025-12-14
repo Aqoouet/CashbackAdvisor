@@ -10,10 +10,16 @@ import (
 
 // sendText отправляет текстовое сообщение с клавиатурой по умолчанию.
 func (b *Bot) sendText(chatID int64, text string) {
+	// Получаем текущую страницу пользователя
+	page := 0
+	if state, exists := b.userStates[chatID]; exists {
+		page = state.KeyboardPage
+	}
+	
 	msg := tgbotapi.NewMessage(chatID, text)
 	msg.ParseMode = "HTML"
 
-	kb := tgbotapi.NewReplyKeyboard(buildKeyboard(nil)...)
+	kb := tgbotapi.NewReplyKeyboard(buildKeyboardWithPage(nil, page)...)
 	kb.ResizeKeyboard = true
 	msg.ReplyMarkup = kb
 

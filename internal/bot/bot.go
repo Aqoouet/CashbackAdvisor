@@ -28,6 +28,8 @@ const (
 	StateAwaitingBankInfoName       UserStateType = "awaiting_bankinfo_name"
 	StateAwaitingUpdateID           UserStateType = "awaiting_update_id"
 	StateAwaitingDeleteID           UserStateType = "awaiting_delete_id"
+	StateAwaitingJoinGroupName      UserStateType = "awaiting_joingroup_name"
+	StateAwaitingCreateGroupName    UserStateType = "awaiting_creategroup_name"
 )
 
 // UserState хранит состояние диалога с пользователем.
@@ -204,6 +206,10 @@ func (b *Bot) handleUserState(message *tgbotapi.Message) bool {
 		b.handleUpdateIDInput(message)
 	case StateAwaitingDeleteID:
 		b.handleDeleteIDInput(message)
+	case StateAwaitingJoinGroupName:
+		b.handleJoinGroupNameInput(message)
+	case StateAwaitingCreateGroupName:
+		b.handleCreateGroupNameInput(message)
 	default:
 		return false
 	}
