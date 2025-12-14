@@ -478,3 +478,51 @@ func sortCashbackByCategoryAndPercent(rules []models.CashbackRule, searchCategor
 	}
 }
 
+// trySuggestSimilarBank пытается найти похожий банк.
+func (b *Bot) trySuggestSimilarBank(message *tgbotapi.Message, bankName, groupName string) {
+	banks, err := b.client.ListAllBanks(groupName)
+	log.Printf("🔍 Получено банков из API: %d, ошибка: %v", len(banks), err)
+
+	if err != nil || len(banks) == 0 {
+		b.sendText(message.Chat.ID, fmt.Sprintf("❌ Кешбек для банка \"%s\" не найден в вашей группе.\n\nИспользуйте /banklist для просмотра всех банков.", bankName))
+		return
+	}
+
+	similar, simPercent, distance := findSimilarCategory(bankName, banks)
+	log.Printf("🔍 Сравнение банков: '%s' → '%s' (расстояние: %d, похожесть: %.1f%%)", bankName, similar, distance, simPercent)
+
+	// Если есть хорошее совпадение (>60% или >40% с расстоянием ≤2)
+	if simPercent > 60.0 || (simPercent > 40.0 && distance <= 2) {
+		log.Printf("✅ Предлагаю исправление банка: '%s' → '%s' (расстояние: %d, похожесть: %.1f%%)", bankName, similar, distance, simPercent)
+		text := fmt.Sprintf("🤔 Возможно, вы имели в виду банк \"%s\"?", similar)
+		buttons := [][]tgbotapi.KeyboardButton{
+			{
+				tgbotapi.NewKeyboardButton(fmt.Sprintf("✅ Да, показать для \"%s\"", similar)),
+			},
+			{
+				tgbotapi.NewKeyboardButton("✏️ Изменить вручную"),
+				tgbotapi.NewKeyboardButton("🚫 Отменить"),
+			},
+		}
+
+		reply := tgbotapi.NewMessage(message.Chat.ID, text)
+		reply.ReplyMarkup = tgbotapi.ReplyKeyboardMarkup{
+			Keyboard:        buttons,
+			ResizeKeyboard:  true,
+			OneTimeKeyboard: true,
+		}
+
+		if _, err := b.api.Send(reply); err != nil {
+			log.Printf("❌ Ошибка отправки: %v", err)
+		}
+
+		// Сохраняем имя банка и название группы в ParsedData
+		b.setState(message.From.ID, StateAwaitingBankCorrection, &ParsedData{BankName: similar, Category: groupName}, nil, 0)
+		return
+	}
+
+	// Похожих банков нет
+	log.Printf("⚠️ Похожие банки не найдены (simPercent: %.1f%%)", simPercent)
+	b.sendText(message.Chat.ID, fmt.Sprintf("❌ Кешбек для банка \"%s\" не найден в вашей группе.\n\nИспользуйте /banklist для просмотра всех банков.", bankName))
+}
+

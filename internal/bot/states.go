@@ -55,6 +55,39 @@ func (b *Bot) handleBankCorrection(message *tgbotapi.Message, state *UserState) 
 	text := strings.ToLower(strings.TrimSpace(message.Text))
 	userID := message.From.ID
 
+	// Если state.Data.Category содержит groupName - это запрос из /bankinfo
+	if state.Data != nil && state.Data.Category != "" && state.Data.BankName != "" {
+		groupName := state.Data.Category // Временно сохранили название группы в поле Category
+		bankName := state.Data.BankName
+		
+		switch {
+		case isYesAnswer(text):
+			log.Printf("✅ Пользователь подтвердил исправление банка для /bankinfo: %s", bankName)
+			b.clearState(userID)
+			
+			// Получаем данные по банку
+			rules, err := b.client.GetCashbackByBank(groupName, bankName)
+			if err != nil || len(rules) == 0 {
+				b.sendText(message.Chat.ID, fmt.Sprintf("❌ Кешбек для банка \"%s\" не найден в вашей группе.", bankName))
+				return
+			}
+			
+			b.sendText(message.Chat.ID, formatBankInfo(bankName, rules))
+			
+		case isManualEditAnswer(text):
+			log.Printf("✏️ Пользователь выбрал ручной ввод для /bankinfo")
+			b.setState(userID, StateAwaitingBankInfoName, nil, nil, 0)
+			b.sendText(message.Chat.ID, "🏦 Введите название банка.\n\nИли /cancel для отмены.")
+			
+		default:
+			log.Printf("❌ Пользователь отклонил исправление банка для /bankinfo")
+			b.clearState(userID)
+			b.sendText(message.Chat.ID, "🚫 Операция отменена.")
+		}
+		return
+	}
+
+	// Обработка для добавления кешбека (старая логика)
 	switch {
 	case isYesAnswer(text):
 		log.Printf("✅ Пользователь подтвердил исправление банка: %s", state.Data.BankName)
@@ -296,7 +329,9 @@ func (b *Bot) handleBankInfoNameInput(message *tgbotapi.Message) {
 	// Получаем данные
 	rules, err := b.client.GetCashbackByBank(groupName, bankName)
 	if err != nil || len(rules) == 0 {
-		b.sendText(message.Chat.ID, fmt.Sprintf("❌ Кешбек для банка \"%s\" не найден в вашей группе.\n\nИспользуйте /banklist для просмотра всех банков.", bankName))
+		// Не найден точный банк - ищем похожие
+		log.Printf("⚠️ Банк '%s' не найден, ищу похожие банки", bankName)
+		b.trySuggestSimilarBank(message, bankName, groupName)
 		return
 	}
 	
