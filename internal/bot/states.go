@@ -410,7 +410,7 @@ func (b *Bot) handleJoinGroupNameInput(message *tgbotapi.Message) {
 	}
 	
 	// Добавляем пользователя в группу
-	err := b.client.SetUserGroup(userIDStr, groupName)
+	err := b.client.JoinGroup(userIDStr, groupName)
 	if err != nil {
 		b.sendText(message.Chat.ID, fmt.Sprintf("❌ %s", err))
 		return
