@@ -132,9 +132,17 @@ func (b *Bot) handleUpdateData(message *tgbotapi.Message, state *UserState) {
 		MaxAmount:       data.MaxAmount,
 	}
 
-	rule, err := b.client.UpdateCashback(state.RuleID, req)
+	_, err = b.client.UpdateCashback(state.RuleID, req)
 	if err != nil {
 		b.sendText(message.Chat.ID, fmt.Sprintf("❌ Ошибка обновления: %s", err))
+		b.clearState(message.From.ID)
+		return
+	}
+
+	// Получаем обновленные данные
+	rule, err := b.client.GetCashbackByID(state.RuleID)
+	if err != nil {
+		b.sendText(message.Chat.ID, "✅ Кешбек обновлён!")
 		b.clearState(message.From.ID)
 		return
 	}
