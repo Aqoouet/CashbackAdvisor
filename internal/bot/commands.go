@@ -310,15 +310,18 @@ func (b *Bot) handleAddCommand(message *tgbotapi.Message) {
 
 // handleBestCommand обрабатывает команду /best.
 func (b *Bot) handleBestCommand(message *tgbotapi.Message) {
-	text := `🔍 Для поиска лучшего кэшбэка отправьте:
-
-📝 Просто напишите категорию и месяц:
+	// Устанавливаем состояние ожидания категории
+	b.setState(message.From.ID, StateAwaitingBestCategory, nil, nil, 0)
+	
+	text := `🔍 Введите категорию для поиска лучшего кэшбэка.
 
 Примеры:
-• "Лучший кэшбэк такси декабрь"
-• "Где выгоднее рестораны январь"
-• "Такси декабрь"
-• "Супермаркеты февраль"`
+• Такси
+• Супермаркеты
+• Фастфуд
+• Рестораны
+
+Или /cancel для отмены.`
 
 	b.sendText(message.Chat.ID, text)
 }
@@ -391,7 +394,9 @@ func (b *Bot) handleList(message *tgbotapi.Message) {
 func (b *Bot) handleUpdateCommand(message *tgbotapi.Message) {
 	args := strings.Fields(message.Text)
 	if len(args) < 2 {
-		b.sendText(message.Chat.ID, "❌ Укажите ID %% кешбека.\n\nПример: /update 5")
+		// Устанавливаем состояние ожидания ID
+		b.setState(message.From.ID, StateAwaitingUpdateID, nil, nil, 0)
+		b.sendText(message.Chat.ID, "🔢 Введите ID кешбека для обновления.\n\nИспользуйте /list для просмотра всех ID.\n\nИли /cancel для отмены.")
 		return
 	}
 
@@ -421,7 +426,9 @@ func (b *Bot) handleUpdateCommand(message *tgbotapi.Message) {
 func (b *Bot) handleDeleteCommand(message *tgbotapi.Message) {
 	args := strings.Fields(message.Text)
 	if len(args) < 2 {
-		b.sendText(message.Chat.ID, "❌ Укажите ID %% кешбека.\n\nПример: /delete 5")
+		// Устанавливаем состояние ожидания ID
+		b.setState(message.From.ID, StateAwaitingDeleteID, nil, nil, 0)
+		b.sendText(message.Chat.ID, "🔢 Введите ID кешбека для удаления.\n\nИспользуйте /list для просмотра всех ID.\n\nИли /cancel для отмены.")
 		return
 	}
 
@@ -459,7 +466,9 @@ func (b *Bot) handleBankInfo(message *tgbotapi.Message) {
 	args = strings.TrimSpace(args)
 
 	if args == "" {
-		b.sendText(message.Chat.ID, "❌ Укажите название банка.\n\nПример: /bankinfo Тинькофф")
+		// Устанавливаем состояние ожидания названия банка
+		b.setState(message.From.ID, StateAwaitingBankInfoName, nil, nil, 0)
+		b.sendText(message.Chat.ID, "🏦 Введите название банка.\n\nПримеры:\n• Тинькофф\n• Сбер\n• Альфа-Банк\n\nИли /cancel для отмены.")
 		return
 	}
 

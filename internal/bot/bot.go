@@ -16,14 +16,18 @@ type UserStateType string
 
 // Константы состояний пользователя.
 const (
-	StateNone                     UserStateType = ""
-	StateAwaitingConfirmation     UserStateType = "awaiting_confirmation"
-	StateAwaitingBankCorrection   UserStateType = "awaiting_bank_correction"
+	StateNone                       UserStateType = ""
+	StateAwaitingConfirmation       UserStateType = "awaiting_confirmation"
+	StateAwaitingBankCorrection     UserStateType = "awaiting_bank_correction"
 	StateAwaitingCategoryCorrection UserStateType = "awaiting_category_correction"
-	StateAwaitingUpdateData       UserStateType = "awaiting_update_data"
-	StateAwaitingDeleteConfirm    UserStateType = "awaiting_delete_confirmation"
-	StateAwaitingGroupName        UserStateType = "awaiting_group_name"
-	StateAwaitingManualInput      UserStateType = "awaiting_manual_input"
+	StateAwaitingUpdateData         UserStateType = "awaiting_update_data"
+	StateAwaitingDeleteConfirm      UserStateType = "awaiting_delete_confirmation"
+	StateAwaitingGroupName          UserStateType = "awaiting_group_name"
+	StateAwaitingManualInput        UserStateType = "awaiting_manual_input"
+	StateAwaitingBestCategory       UserStateType = "awaiting_best_category"
+	StateAwaitingBankInfoName       UserStateType = "awaiting_bankinfo_name"
+	StateAwaitingUpdateID           UserStateType = "awaiting_update_id"
+	StateAwaitingDeleteID           UserStateType = "awaiting_delete_id"
 )
 
 // UserState хранит состояние диалога с пользователем.
@@ -192,6 +196,14 @@ func (b *Bot) handleUserState(message *tgbotapi.Message) bool {
 		b.handleGroupNameInput(message)
 	case StateAwaitingManualInput:
 		b.handleManualInput(message, state)
+	case StateAwaitingBestCategory:
+		b.handleBestCategoryInput(message)
+	case StateAwaitingBankInfoName:
+		b.handleBankInfoNameInput(message)
+	case StateAwaitingUpdateID:
+		b.handleUpdateIDInput(message)
+	case StateAwaitingDeleteID:
+		b.handleDeleteIDInput(message)
 	default:
 		return false
 	}

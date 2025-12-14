@@ -233,3 +233,142 @@ func (b *Bot) handleManualInput(message *tgbotapi.Message, state *UserState) {
 	b.clearState(message.From.ID)
 }
 
+// handleBestCategoryInput обрабатывает ввод категории для команды /best.
+func (b *Bot) handleBestCategoryInput(message *tgbotapi.Message) {
+	userID := message.From.ID
+	category := strings.TrimSpace(message.Text)
+	
+	// Проверка на отмену
+	if isCancelAnswer(category) {
+		b.clearState(userID)
+		b.sendText(message.Chat.ID, "🚫 Операция отменена")
+		return
+	}
+	
+	// Очищаем состояние и выполняем поиск
+	b.clearState(userID)
+	b.handleBestQueryWithCorrection(message, category, false)
+}
+
+// handleBankInfoNameInput обрабатывает ввод названия банка для команды /bankinfo.
+func (b *Bot) handleBankInfoNameInput(message *tgbotapi.Message) {
+	userID := message.From.ID
+	bankName := strings.TrimSpace(message.Text)
+	
+	// Проверка на отмену
+	if isCancelAnswer(bankName) {
+		b.clearState(userID)
+		b.sendText(message.Chat.ID, "🚫 Операция отменена")
+		return
+	}
+	
+	// Очищаем состояние
+	b.clearState(userID)
+	
+	// Получаем группу
+	userIDStr := strconv.FormatInt(userID, 10)
+	groupName, err := b.client.GetUserGroup(userIDStr)
+	if err != nil {
+		b.sendText(message.Chat.ID, "❌ Вы должны быть в группе. Используйте /creategroup или /joingroup")
+		return
+	}
+	
+	// Получаем данные
+	rules, err := b.client.GetCashbackByBank(groupName, bankName)
+	if err != nil || len(rules) == 0 {
+		b.sendText(message.Chat.ID, fmt.Sprintf("❌ Кешбек для банка \"%s\" не найден в вашей группе.", bankName))
+		return
+	}
+	
+	b.sendText(message.Chat.ID, formatBankInfo(bankName, rules))
+}
+
+// handleUpdateIDInput обрабатывает ввод ID для команды /update.
+func (b *Bot) handleUpdateIDInput(message *tgbotapi.Message) {
+	userID := message.From.ID
+	idStr := strings.TrimSpace(message.Text)
+	
+	// Проверка на отмену
+	if isCancelAnswer(idStr) {
+		b.clearState(userID)
+		b.sendText(message.Chat.ID, "🚫 Операция отменена")
+		return
+	}
+	
+	// Парсим ID
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		b.sendText(message.Chat.ID, "❌ Неверный формат ID. Введите число или /cancel для отмены.")
+		return
+	}
+	
+	// Получаем правило
+	rule, err := b.client.GetCashbackByID(id)
+	if err != nil {
+		b.sendText(message.Chat.ID, fmt.Sprintf("❌ Кешбек с ID %d не найден.", id))
+		b.clearState(userID)
+		return
+	}
+	
+	// Проверяем владельца
+	if rule.UserID != strconv.FormatInt(userID, 10) {
+		b.sendText(message.Chat.ID, "❌ Вы можете обновлять только свой кешбек.")
+		b.clearState(userID)
+		return
+	}
+	
+	// Переходим к ожиданию данных для обновления
+	b.sendText(message.Chat.ID, formatUpdatePrompt(rule))
+	b.setState(userID, StateAwaitingUpdateData, nil, nil, id)
+}
+
+// handleDeleteIDInput обрабатывает ввод ID для команды /delete.
+func (b *Bot) handleDeleteIDInput(message *tgbotapi.Message) {
+	userID := message.From.ID
+	idStr := strings.TrimSpace(message.Text)
+	
+	// Проверка на отмену
+	if isCancelAnswer(idStr) {
+		b.clearState(userID)
+		b.sendText(message.Chat.ID, "🚫 Операция отменена")
+		return
+	}
+	
+	// Парсим ID
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		b.sendText(message.Chat.ID, "❌ Неверный формат ID. Введите число или /cancel для отмены.")
+		return
+	}
+	
+	// Получаем правило
+	rule, err := b.client.GetCashbackByID(id)
+	if err != nil {
+		b.sendText(message.Chat.ID, fmt.Sprintf("❌ Кешбек с ID %d не найден.", id))
+		b.clearState(userID)
+		return
+	}
+	
+	// Проверяем владельца
+	if rule.UserID != strconv.FormatInt(userID, 10) {
+		b.sendText(message.Chat.ID, "❌ Вы можете удалять только свой кешбек.")
+		b.clearState(userID)
+		return
+	}
+	
+	// Переходим к подтверждению удаления
+	text := fmt.Sprintf(
+		"⚠️ Вы уверены, что хотите удалить этот кешбек?\n\n"+
+			"🏦 Банк: %s\n"+
+			"📁 Категория: %s\n"+
+			"💰 %.1f%%%% до %.0f₽\n"+
+			"📅 До %s\n\n"+
+			"❓ Удалить?",
+		rule.BankName, rule.Category, rule.CashbackPercent,
+		rule.MaxAmount, rule.MonthYear.Format("02.01.2006"),
+	)
+	
+	b.setState(userID, StateAwaitingDeleteConfirm, nil, nil, id)
+	b.sendWithButtons(message.Chat.ID, text, ButtonsDelete)
+}
+
