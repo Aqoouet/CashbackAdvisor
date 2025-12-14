@@ -239,6 +239,36 @@ func (c *APIClient) ListAllCategories(groupName, monthYear string) ([]string, er
 	return categories, nil
 }
 
+// ListAllBanks получает список всех уникальных банков.
+func (c *APIClient) ListAllBanks(groupName string) ([]string, error) {
+	params := url.Values{}
+	params.Add("group_name", groupName)
+	params.Add("limit", fmt.Sprintf("%d", MaxListLimit))
+
+	body, statusCode, err := c.get(EndpointCashback, params)
+	if err != nil {
+		return nil, err
+	}
+
+	result, err := parseResponse[models.ListCashbackResponse](body, statusCode, http.StatusOK)
+	if err != nil {
+		return nil, err
+	}
+
+	// Собираем уникальные банки
+	bankSet := make(map[string]struct{})
+	for _, rule := range result.Rules {
+		bankSet[rule.BankName] = struct{}{}
+	}
+
+	banks := make([]string, 0, len(bankSet))
+	for bank := range bankSet {
+		banks = append(banks, bank)
+	}
+
+	return banks, nil
+}
+
 // GetCashbackByBank получает все кэшбэки по банку в группе.
 func (c *APIClient) GetCashbackByBank(groupName, bankName string) ([]models.CashbackRule, error) {
 	// Получаем все кэшбэки группы
