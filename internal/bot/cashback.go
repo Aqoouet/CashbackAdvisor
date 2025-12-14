@@ -415,8 +415,6 @@ func (b *Bot) getAllCashbacksByCategory(groupName, category, monthYear string) (
 
 // sortCashbackByCategoryAndPercent сортирует кэшбэки: сначала точные совпадения категории, потом по убыванию процента.
 func sortCashbackByCategoryAndPercent(rules []models.CashbackRule, searchCategory string) {
-	searchCategoryLower := strings.ToLower(strings.TrimSpace(searchCategory))
-	
 	for i := 0; i < len(rules)-1; i++ {
 		for j := i + 1; j < len(rules); j++ {
 			// Приоритет точным совпадениям
