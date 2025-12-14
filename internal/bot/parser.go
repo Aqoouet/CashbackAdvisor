@@ -297,20 +297,3 @@ func ValidateParsedData(data *ParsedData) []string {
 	return missing
 }
 
-// FormatParsedData форматирует данные для отображения пользователю
-func FormatParsedData(data *ParsedData) string {
-	return fmt.Sprintf(
-		"📋 Распознанные данные:\n\n"+
-			"🏦 Банк: %s\n"+
-			"📁 Категория: %s\n"+
-			"📅 Месяц: %s\n"+
-			"💰 Кэшбэк: %.1f%%\n"+
-			"💵 Макс. сумма: %.0f₽",
-		data.BankName,
-		data.Category,
-		data.MonthYear,
-		data.CashbackPercent,
-		data.MaxAmount,
-	)
-}
-

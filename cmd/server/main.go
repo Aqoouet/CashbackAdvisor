@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -19,28 +18,58 @@ import (
 	"github.com/rymax1e/open-cashback-advisor/internal/service"
 )
 
+// Таймауты сервера.
+const (
+	readTimeout     = 15 * time.Second
+	writeTimeout    = 15 * time.Second
+	idleTimeout     = 60 * time.Second
+	requestTimeout  = 60 * time.Second
+	shutdownTimeout = 30 * time.Second
+	corsMaxAge      = 300
+)
+
 func main() {
-	// Загрузка конфигурации
+	// Загрузка и валидация конфигурации
 	cfg := config.Load()
+	if err := cfg.Validate(); err != nil {
+		log.Fatalf("❌ Ошибка конфигурации: %v", err)
+	}
 
 	log.Println("🚀 Запуск Open Cashback Advisor...")
 
-	// Подключение к базе данных
-	ctx := context.Background()
-	db, err := database.New(ctx, cfg.Database.ConnectionString())
+	// Инициализация базы данных
+	db, err := initDatabase(cfg)
 	if err != nil {
 		log.Fatalf("❌ Не удалось подключиться к базе данных: %v", err)
 	}
 	defer db.Close()
 
-	log.Println("✅ Успешное подключение к базе данных")
-
-	// Создание репозитория, сервиса и обработчиков
+	// Создание зависимостей
 	repo := database.NewRepository(db)
 	svc := service.NewService(repo)
 	handler := handlers.NewHandler(svc)
 
-	// Настройка роутера
+	// Настройка и запуск сервера
+	router := setupRouter(handler)
+	srv := createServer(cfg.Server.Address(), router)
+
+	// Запуск с graceful shutdown
+	runServer(srv)
+}
+
+// initDatabase инициализирует подключение к базе данных.
+func initDatabase(cfg *config.Config) (*database.Database, error) {
+	ctx := context.Background()
+	db, err := database.New(ctx, cfg.Database.ConnectionString())
+	if err != nil {
+		return nil, err
+	}
+	log.Println("✅ Успешное подключение к базе данных")
+	return db, nil
+}
+
+// setupRouter настраивает маршрутизатор.
+func setupRouter(handler *handlers.Handler) *chi.Mux {
 	r := chi.NewRouter()
 
 	// Middleware
@@ -48,7 +77,7 @@ func main() {
 	r.Use(middleware.RealIP)
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
-	r.Use(middleware.Timeout(60 * time.Second))
+	r.Use(middleware.Timeout(requestTimeout))
 
 	// CORS
 	r.Use(cors.Handler(cors.Options{
@@ -57,23 +86,28 @@ func main() {
 		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-Request-ID"},
 		ExposedHeaders:   []string{"Link"},
 		AllowCredentials: false,
-		MaxAge:           300,
+		MaxAge:           corsMaxAge,
 	}))
 
 	// Регистрация маршрутов
 	handler.RegisterRoutes(r)
 
-	// Настройка HTTP сервера
-	addr := fmt.Sprintf("%s:%s", cfg.Server.Host, cfg.Server.Port)
-	srv := &http.Server{
-		Addr:         addr,
-		Handler:      r,
-		ReadTimeout:  15 * time.Second,
-		WriteTimeout: 15 * time.Second,
-		IdleTimeout:  60 * time.Second,
-	}
+	return r
+}
 
-	// Graceful shutdown
+// createServer создаёт HTTP сервер.
+func createServer(addr string, handler http.Handler) *http.Server {
+	return &http.Server{
+		Addr:         addr,
+		Handler:      handler,
+		ReadTimeout:  readTimeout,
+		WriteTimeout: writeTimeout,
+		IdleTimeout:  idleTimeout,
+	}
+}
+
+// runServer запускает сервер с поддержкой graceful shutdown.
+func runServer(srv *http.Server) {
 	done := make(chan bool, 1)
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
@@ -82,7 +116,7 @@ func main() {
 		<-quit
 		log.Println("\n⚠️  Получен сигнал остановки сервера...")
 
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
 		defer cancel()
 
 		srv.SetKeepAlivesEnabled(false)
@@ -92,6 +126,18 @@ func main() {
 		close(done)
 	}()
 
+	logServerInfo(srv.Addr)
+
+	if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		log.Fatalf("❌ Не удалось запустить сервер: %v", err)
+	}
+
+	<-done
+	log.Println("✅ Сервер корректно остановлен")
+}
+
+// logServerInfo выводит информацию о запуске сервера.
+func logServerInfo(addr string) {
 	log.Printf("🌐 Сервер запущен на http://%s", addr)
 	log.Println("📖 API документация:")
 	log.Println("   POST   /api/v1/cashback/suggest  - Анализ и предложения")
@@ -103,12 +149,4 @@ func main() {
 	log.Println("   DELETE /api/v1/cashback/{id}     - Удалить правило")
 	log.Println("   GET    /health                   - Проверка здоровья")
 	log.Println()
-
-	if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-		log.Fatalf("❌ Не удалось запустить сервер: %v", err)
-	}
-
-	<-done
-	log.Println("✅ Сервер корректно остановлен")
 }
-

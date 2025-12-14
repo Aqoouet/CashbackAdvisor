@@ -7,480 +7,356 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"time"
 
 	"github.com/rymax1e/open-cashback-advisor/internal/models"
 )
 
-// APIClient клиент для взаимодействия с API сервиса
+// APIClient — клиент для взаимодействия с API сервиса.
 type APIClient struct {
 	baseURL    string
 	httpClient *http.Client
 }
 
-// NewAPIClient создает новый API клиент
+// NewAPIClient создаёт новый API клиент.
 func NewAPIClient(baseURL string) *APIClient {
 	return &APIClient{
 		baseURL: baseURL,
 		httpClient: &http.Client{
-			Timeout: 30 * time.Second,
+			Timeout: HTTPClientTimeout,
 		},
 	}
 }
 
-// Suggest вызывает эндпоинт /suggest для анализа данных
+// --- Приватные методы для HTTP запросов ---
+
+// doRequest выполняет HTTP запрос и возвращает тело ответа.
+func (c *APIClient) doRequest(req *http.Request) ([]byte, int, error) {
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, 0, fmt.Errorf("ошибка запроса: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, resp.StatusCode, fmt.Errorf("ошибка чтения ответа: %w", err)
+	}
+
+	return body, resp.StatusCode, nil
+}
+
+// get выполняет GET запрос.
+func (c *APIClient) get(endpoint string, params url.Values) ([]byte, int, error) {
+	requestURL := c.baseURL + endpoint
+	if len(params) > 0 {
+		requestURL += "?" + params.Encode()
+	}
+
+	req, err := http.NewRequest(http.MethodGet, requestURL, nil)
+	if err != nil {
+		return nil, 0, fmt.Errorf("ошибка создания запроса: %w", err)
+	}
+
+	return c.doRequest(req)
+}
+
+// post выполняет POST запрос с JSON телом.
+func (c *APIClient) post(endpoint string, payload interface{}) ([]byte, int, error) {
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return nil, 0, fmt.Errorf("ошибка сериализации: %w", err)
+	}
+
+	req, err := http.NewRequest(http.MethodPost, c.baseURL+endpoint, bytes.NewBuffer(body))
+	if err != nil {
+		return nil, 0, fmt.Errorf("ошибка создания запроса: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	return c.doRequest(req)
+}
+
+// put выполняет PUT запрос с JSON телом.
+func (c *APIClient) put(endpoint string, payload interface{}) ([]byte, int, error) {
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return nil, 0, fmt.Errorf("ошибка сериализации: %w", err)
+	}
+
+	req, err := http.NewRequest(http.MethodPut, c.baseURL+endpoint, bytes.NewBuffer(body))
+	if err != nil {
+		return nil, 0, fmt.Errorf("ошибка создания запроса: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	return c.doRequest(req)
+}
+
+// delete выполняет DELETE запрос.
+func (c *APIClient) delete(endpoint string) (int, error) {
+	req, err := http.NewRequest(http.MethodDelete, c.baseURL+endpoint, nil)
+	if err != nil {
+		return 0, fmt.Errorf("ошибка создания запроса: %w", err)
+	}
+
+	_, statusCode, err := c.doRequest(req)
+	return statusCode, err
+}
+
+// parseResponse парсит JSON ответ в структуру.
+func parseResponse[T any](body []byte, statusCode int, expectedStatus int) (*T, error) {
+	if statusCode != expectedStatus {
+		return nil, parseAPIError(body, statusCode)
+	}
+
+	var result T
+	if err := json.Unmarshal(body, &result); err != nil {
+		return nil, fmt.Errorf("ошибка десериализации: %w", err)
+	}
+
+	return &result, nil
+}
+
+// parseAPIError извлекает ошибку из ответа API.
+func parseAPIError(body []byte, statusCode int) error {
+	var errResp models.ErrorResponse
+	if err := json.Unmarshal(body, &errResp); err == nil && errResp.Error != "" {
+		return fmt.Errorf("%s", errResp.Error)
+	}
+	return fmt.Errorf("ошибка API: статус %d", statusCode)
+}
+
+// --- Методы для работы с кэшбэком ---
+
+// Suggest вызывает эндпоинт /suggest для анализа данных.
 func (c *APIClient) Suggest(req *models.SuggestRequest) (*models.SuggestResponse, error) {
-	url := fmt.Sprintf("%s/api/v1/cashback/suggest", c.baseURL)
-	
-	body, err := json.Marshal(req)
+	body, statusCode, err := c.post(EndpointCashbackSuggest, req)
 	if err != nil {
-		return nil, fmt.Errorf("ошибка сериализации: %w", err)
+		return nil, err
 	}
-
-	resp, err := c.httpClient.Post(url, "application/json", bytes.NewBuffer(body))
-	if err != nil {
-		return nil, fmt.Errorf("ошибка запроса: %w", err)
-	}
-	defer resp.Body.Close()
-
-	respBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("ошибка чтения ответа: %w", err)
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		var errResp models.ErrorResponse
-		if err := json.Unmarshal(respBody, &errResp); err == nil {
-			return nil, fmt.Errorf("ошибка API: %s", errResp.Error)
-		}
-		return nil, fmt.Errorf("ошибка API: статус %d", resp.StatusCode)
-	}
-
-	var result models.SuggestResponse
-	if err := json.Unmarshal(respBody, &result); err != nil {
-		return nil, fmt.Errorf("ошибка десериализации: %w", err)
-	}
-
-	return &result, nil
+	return parseResponse[models.SuggestResponse](body, statusCode, http.StatusOK)
 }
 
-// CreateCashback создает новое правило кэшбэка
+// CreateCashback создаёт новое правило кэшбэка.
 func (c *APIClient) CreateCashback(req *models.CreateCashbackRequest) (*models.CashbackRule, error) {
-	url := fmt.Sprintf("%s/api/v1/cashback", c.baseURL)
-	
-	body, err := json.Marshal(req)
+	body, statusCode, err := c.post(EndpointCashback, req)
 	if err != nil {
-		return nil, fmt.Errorf("ошибка сериализации: %w", err)
+		return nil, err
 	}
-
-	resp, err := c.httpClient.Post(url, "application/json", bytes.NewBuffer(body))
-	if err != nil {
-		return nil, fmt.Errorf("ошибка запроса: %w", err)
-	}
-	defer resp.Body.Close()
-
-	respBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("ошибка чтения ответа: %w", err)
-	}
-
-	if resp.StatusCode != http.StatusCreated {
-		var errResp models.ErrorResponse
-		if err := json.Unmarshal(respBody, &errResp); err == nil {
-			return nil, fmt.Errorf("ошибка API: %s", errResp.Error)
-		}
-		return nil, fmt.Errorf("ошибка API: статус %d", resp.StatusCode)
-	}
-
-	var result models.CashbackRule
-	if err := json.Unmarshal(respBody, &result); err != nil {
-		return nil, fmt.Errorf("ошибка десериализации: %w", err)
-	}
-
-	return &result, nil
+	return parseResponse[models.CashbackRule](body, statusCode, http.StatusCreated)
 }
 
-// GetBestCashback получает лучший кэшбэк
-func (c *APIClient) GetBestCashback(groupName, category, monthYear string) (*models.CashbackRule, error) {
-	// Правильное кодирование параметров URL
-	params := url.Values{}
-	params.Add("group_name", groupName)
-	params.Add("category", category)
-	params.Add("month_year", monthYear)
-	
-	requestURL := fmt.Sprintf("%s/api/v1/cashback/best?%s", c.baseURL, params.Encode())
-	
-	resp, err := c.httpClient.Get(requestURL)
+// GetCashbackByID получает правило по ID.
+func (c *APIClient) GetCashbackByID(id int64) (*models.CashbackRule, error) {
+	endpoint := fmt.Sprintf("%s/%d", EndpointCashback, id)
+	body, statusCode, err := c.get(endpoint, nil)
 	if err != nil {
-		return nil, fmt.Errorf("ошибка запроса: %w", err)
+		return nil, err
 	}
-	defer resp.Body.Close()
-
-	respBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("ошибка чтения ответа: %w", err)
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		var errResp models.ErrorResponse
-		if err := json.Unmarshal(respBody, &errResp); err == nil {
-			return nil, fmt.Errorf("%s", errResp.Error)
-		}
-		return nil, fmt.Errorf("ошибка API: статус %d", resp.StatusCode)
-	}
-
-	var result models.CashbackRule
-	if err := json.Unmarshal(respBody, &result); err != nil {
-		return nil, fmt.Errorf("ошибка десериализации: %w", err)
-	}
-
-	return &result, nil
+	return parseResponse[models.CashbackRule](body, statusCode, http.StatusOK)
 }
 
-// ListAllCategories получает список всех уникальных категорий
-func (c *APIClient) ListAllCategories(groupName, monthYear string) ([]string, error) {
-	params := url.Values{}
-	params.Add("group_name", groupName)
-	params.Add("month_year", monthYear)
-	params.Add("limit", "1000") // Большой лимит для получения всех
-	
-	requestURL := fmt.Sprintf("%s/api/v1/cashback?%s", c.baseURL, params.Encode())
-	
-	resp, err := c.httpClient.Get(requestURL)
+// UpdateCashback обновляет правило кэшбэка.
+func (c *APIClient) UpdateCashback(id int64, req *models.UpdateCashbackRequest) (*models.CashbackRule, error) {
+	endpoint := fmt.Sprintf("%s/%d", EndpointCashback, id)
+	body, statusCode, err := c.put(endpoint, req)
 	if err != nil {
-		return nil, fmt.Errorf("ошибка запроса: %w", err)
+		return nil, err
 	}
-	defer resp.Body.Close()
-
-	respBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("ошибка чтения ответа: %w", err)
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("ошибка API: статус %d", resp.StatusCode)
-	}
-
-	var result models.ListCashbackResponse
-	if err := json.Unmarshal(respBody, &result); err != nil {
-		return nil, fmt.Errorf("ошибка десериализации: %w", err)
-	}
-
-	// Собираем уникальные категории
-	categories := make(map[string]bool)
-	for _, rule := range result.Rules {
-		categories[rule.Category] = true
-	}
-	
-	var uniqueCategories []string
-	for cat := range categories {
-		uniqueCategories = append(uniqueCategories, cat)
-	}
-	
-	return uniqueCategories, nil
+	return parseResponse[models.CashbackRule](body, statusCode, http.StatusOK)
 }
 
-// ListCashback получает список правил группы
+// DeleteCashback удаляет правило по ID.
+func (c *APIClient) DeleteCashback(id int64) error {
+	endpoint := fmt.Sprintf("%s/%d", EndpointCashback, id)
+	statusCode, err := c.delete(endpoint)
+	if err != nil {
+		return err
+	}
+	if statusCode != http.StatusOK {
+		return fmt.Errorf("ошибка удаления: статус %d", statusCode)
+	}
+	return nil
+}
+
+// ListCashback получает список правил группы.
 func (c *APIClient) ListCashback(groupName string, limit, offset int) (*models.ListCashbackResponse, error) {
-	// Правильное кодирование параметров URL
 	params := url.Values{}
 	params.Add("group_name", groupName)
 	params.Add("limit", fmt.Sprintf("%d", limit))
 	params.Add("offset", fmt.Sprintf("%d", offset))
-	
-	requestURL := fmt.Sprintf("%s/api/v1/cashback?%s", c.baseURL, params.Encode())
-	
-	resp, err := c.httpClient.Get(requestURL)
+
+	body, statusCode, err := c.get(EndpointCashback, params)
 	if err != nil {
-		return nil, fmt.Errorf("ошибка запроса: %w", err)
+		return nil, err
 	}
-	defer resp.Body.Close()
-
-	respBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("ошибка чтения ответа: %w", err)
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		var errResp models.ErrorResponse
-		if err := json.Unmarshal(respBody, &errResp); err == nil {
-			return nil, fmt.Errorf("%s", errResp.Error)
-		}
-		return nil, fmt.Errorf("ошибка API: статус %d", resp.StatusCode)
-	}
-
-	var result models.ListCashbackResponse
-	if err := json.Unmarshal(respBody, &result); err != nil {
-		return nil, fmt.Errorf("ошибка десериализации: %w", err)
-	}
-
-	return &result, nil
+	return parseResponse[models.ListCashbackResponse](body, statusCode, http.StatusOK)
 }
 
-// GetCashbackByID получает правило по ID
-func (c *APIClient) GetCashbackByID(id int64) (*models.CashbackRule, error) {
-	requestURL := fmt.Sprintf("%s/api/v1/cashback/%d", c.baseURL, id)
-	
-	resp, err := c.httpClient.Get(requestURL)
+// GetBestCashback получает лучший кэшбэк.
+func (c *APIClient) GetBestCashback(groupName, category, monthYear string) (*models.CashbackRule, error) {
+	params := url.Values{}
+	params.Add("group_name", groupName)
+	params.Add("category", category)
+	params.Add("month_year", monthYear)
+
+	body, statusCode, err := c.get(EndpointCashbackBest, params)
 	if err != nil {
-		return nil, fmt.Errorf("ошибка запроса: %w", err)
+		return nil, err
 	}
-	defer resp.Body.Close()
-
-	respBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("ошибка чтения ответа: %w", err)
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		var errResp models.ErrorResponse
-		if err := json.Unmarshal(respBody, &errResp); err == nil {
-			return nil, fmt.Errorf("%s", errResp.Error)
-		}
-		return nil, fmt.Errorf("ошибка API: статус %d", resp.StatusCode)
-	}
-
-	var result models.CashbackRule
-	if err := json.Unmarshal(respBody, &result); err != nil {
-		return nil, fmt.Errorf("ошибка десериализации: %w", err)
-	}
-
-	return &result, nil
+	return parseResponse[models.CashbackRule](body, statusCode, http.StatusOK)
 }
 
-// UpdateCashback обновляет правило кэшбэка
-func (c *APIClient) UpdateCashback(id int64, req *models.UpdateCashbackRequest) (*models.CashbackRule, error) {
-	requestURL := fmt.Sprintf("%s/api/v1/cashback/%d", c.baseURL, id)
-	
-	body, err := json.Marshal(req)
+// ListAllCategories получает список всех уникальных категорий.
+func (c *APIClient) ListAllCategories(groupName, monthYear string) ([]string, error) {
+	params := url.Values{}
+	params.Add("group_name", groupName)
+	params.Add("month_year", monthYear)
+	params.Add("limit", fmt.Sprintf("%d", MaxListLimit))
+
+	body, statusCode, err := c.get(EndpointCashback, params)
 	if err != nil {
-		return nil, fmt.Errorf("ошибка сериализации: %w", err)
+		return nil, err
 	}
 
-	httpReq, err := http.NewRequest(http.MethodPut, requestURL, bytes.NewBuffer(body))
+	result, err := parseResponse[models.ListCashbackResponse](body, statusCode, http.StatusOK)
 	if err != nil {
-		return nil, fmt.Errorf("ошибка создания запроса: %w", err)
-	}
-	httpReq.Header.Set("Content-Type", "application/json")
-
-	resp, err := c.httpClient.Do(httpReq)
-	if err != nil {
-		return nil, fmt.Errorf("ошибка запроса: %w", err)
-	}
-	defer resp.Body.Close()
-
-	respBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("ошибка чтения ответа: %w", err)
+		return nil, err
 	}
 
-	if resp.StatusCode != http.StatusOK {
-		var errResp models.ErrorResponse
-		if err := json.Unmarshal(respBody, &errResp); err == nil {
-			return nil, fmt.Errorf("%s", errResp.Error)
-		}
-		return nil, fmt.Errorf("ошибка API: статус %d", resp.StatusCode)
+	// Собираем уникальные категории
+	categorySet := make(map[string]struct{})
+	for _, rule := range result.Rules {
+		categorySet[rule.Category] = struct{}{}
 	}
 
-	var result models.CashbackRule
-	if err := json.Unmarshal(respBody, &result); err != nil {
-		return nil, fmt.Errorf("ошибка десериализации: %w", err)
+	categories := make([]string, 0, len(categorySet))
+	for cat := range categorySet {
+		categories = append(categories, cat)
 	}
 
-	return &result, nil
-}
-
-// DeleteCashback удаляет правило по ID
-func (c *APIClient) DeleteCashback(id int64) error {
-	requestURL := fmt.Sprintf("%s/api/v1/cashback/%d", c.baseURL, id)
-	
-	req, err := http.NewRequest(http.MethodDelete, requestURL, nil)
-	if err != nil {
-		return fmt.Errorf("ошибка создания запроса: %w", err)
-	}
-
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return fmt.Errorf("ошибка запроса: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		respBody, _ := io.ReadAll(resp.Body)
-		var errResp models.ErrorResponse
-		if err := json.Unmarshal(respBody, &errResp); err == nil {
-			return fmt.Errorf("%s", errResp.Error)
-		}
-		return fmt.Errorf("ошибка API: статус %d", resp.StatusCode)
-	}
-
-	return nil
+	return categories, nil
 }
 
 // --- Методы для работы с группами ---
 
-// GetUserGroup получает группу пользователя
+// GetUserGroup получает группу пользователя.
 func (c *APIClient) GetUserGroup(userID string) (string, error) {
-	url := fmt.Sprintf("%s/api/v1/users/%s/group", c.baseURL, userID)
-	
-	resp, err := c.httpClient.Get(url)
+	endpoint := fmt.Sprintf(EndpointUserGroup, userID)
+	body, statusCode, err := c.get(endpoint, nil)
 	if err != nil {
-		return "", fmt.Errorf("ошибка запроса: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode == http.StatusNotFound {
-		return "", fmt.Errorf("пользователь не в группе")
+		return "", err
 	}
 
-	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("ошибка API: статус %d", resp.StatusCode)
+	if statusCode == http.StatusNotFound {
+		return "", ErrUserNotInGroup
+	}
+	if statusCode != http.StatusOK {
+		return "", parseAPIError(body, statusCode)
 	}
 
 	var result struct {
 		GroupName string `json:"group_name"`
 	}
-	
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+	if err := json.Unmarshal(body, &result); err != nil {
 		return "", fmt.Errorf("ошибка декодирования: %w", err)
 	}
 
 	return result.GroupName, nil
 }
 
-// CreateGroup создаёт новую группу
+// CreateGroup создаёт новую группу.
 func (c *APIClient) CreateGroup(groupName, creatorID string) error {
-	url := fmt.Sprintf("%s/api/v1/groups", c.baseURL)
-	
-	reqData := map[string]string{
+	payload := map[string]string{
 		"group_name": groupName,
 		"creator_id": creatorID,
 	}
-	
-	body, err := json.Marshal(reqData)
+
+	body, statusCode, err := c.post(EndpointGroups, payload)
 	if err != nil {
-		return fmt.Errorf("ошибка сериализации: %w", err)
+		return err
 	}
 
-	resp, err := c.httpClient.Post(url, "application/json", bytes.NewBuffer(body))
-	if err != nil {
-		return fmt.Errorf("ошибка запроса: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK {
-		respBody, _ := io.ReadAll(resp.Body)
-		var errResp models.ErrorResponse
-		if err := json.Unmarshal(respBody, &errResp); err == nil {
-			return fmt.Errorf("%s", errResp.Error)
-		}
-		return fmt.Errorf("ошибка API: статус %d", resp.StatusCode)
+	if statusCode != http.StatusCreated && statusCode != http.StatusOK {
+		return parseAPIError(body, statusCode)
 	}
 
 	return nil
 }
 
-// JoinGroup присоединяет пользователя к группе
+// JoinGroup присоединяет пользователя к группе.
 func (c *APIClient) JoinGroup(userID, groupName string) error {
-	url := fmt.Sprintf("%s/api/v1/users/%s/group", c.baseURL, userID)
-	
-	reqData := map[string]string{
+	endpoint := fmt.Sprintf(EndpointUserGroup, userID)
+	payload := map[string]string{
 		"group_name": groupName,
 	}
-	
-	body, err := json.Marshal(reqData)
+
+	body, statusCode, err := c.put(endpoint, payload)
 	if err != nil {
-		return fmt.Errorf("ошибка сериализации: %w", err)
+		return err
 	}
 
-	req, err := http.NewRequest(http.MethodPut, url, bytes.NewBuffer(body))
-	if err != nil {
-		return fmt.Errorf("ошибка создания запроса: %w", err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return fmt.Errorf("ошибка запроса: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		respBody, _ := io.ReadAll(resp.Body)
-		var errResp models.ErrorResponse
-		if err := json.Unmarshal(respBody, &errResp); err == nil {
-			return fmt.Errorf("%s", errResp.Error)
-		}
-		return fmt.Errorf("ошибка API: статус %d", resp.StatusCode)
+	if statusCode != http.StatusOK {
+		return parseAPIError(body, statusCode)
 	}
 
 	return nil
 }
 
-// GroupExists проверяет существование группы
+// GroupExists проверяет существование группы.
 func (c *APIClient) GroupExists(groupName string) bool {
 	params := url.Values{}
 	params.Add("name", groupName)
-	url := fmt.Sprintf("%s/api/v1/groups/check?%s", c.baseURL, params.Encode())
-	
-	resp, err := c.httpClient.Get(url)
+
+	_, statusCode, err := c.get(EndpointGroupsCheck, params)
 	if err != nil {
 		return false
 	}
-	defer resp.Body.Close()
 
-	return resp.StatusCode == http.StatusOK
+	return statusCode == http.StatusOK
 }
 
-// GetAllGroups возвращает список всех групп
+// GetAllGroups возвращает список всех групп.
 func (c *APIClient) GetAllGroups() ([]string, error) {
-	url := fmt.Sprintf("%s/api/v1/groups", c.baseURL)
-	
-	resp, err := c.httpClient.Get(url)
+	body, statusCode, err := c.get(EndpointGroups, nil)
 	if err != nil {
-		return nil, fmt.Errorf("ошибка запроса: %w", err)
+		return nil, err
 	}
-	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("ошибка API: статус %d", resp.StatusCode)
+	if statusCode != http.StatusOK {
+		return nil, parseAPIError(body, statusCode)
 	}
 
 	var result struct {
 		Groups []string `json:"groups"`
 	}
-	
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+	if err := json.Unmarshal(body, &result); err != nil {
 		return nil, fmt.Errorf("ошибка декодирования: %w", err)
 	}
 
 	return result.Groups, nil
 }
 
-// GetGroupMembers возвращает участников группы
+// GetGroupMembers возвращает участников группы.
 func (c *APIClient) GetGroupMembers(groupName string) ([]string, error) {
 	params := url.Values{}
 	params.Add("name", groupName)
-	url := fmt.Sprintf("%s/api/v1/groups/members?%s", c.baseURL, params.Encode())
-	
-	resp, err := c.httpClient.Get(url)
-	if err != nil {
-		return nil, fmt.Errorf("ошибка запроса: %w", err)
-	}
-	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("ошибка API: статус %d", resp.StatusCode)
+	body, statusCode, err := c.get(EndpointGroupsMembers, params)
+	if err != nil {
+		return nil, err
+	}
+
+	if statusCode != http.StatusOK {
+		return nil, parseAPIError(body, statusCode)
 	}
 
 	var result struct {
 		Members []string `json:"members"`
 	}
-	
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+	if err := json.Unmarshal(body, &result); err != nil {
 		return nil, fmt.Errorf("ошибка декодирования: %w", err)
 	}
 
 	return result.Members, nil
 }
-

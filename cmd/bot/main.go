@@ -12,12 +12,10 @@ import (
 func main() {
 	log.Printf("🚀 Запуск Telegram бота Open Cashback Advisor %s...", bot.BuildInfo())
 
-	// Загрузка конфигурации
+	// Загрузка и валидация конфигурации
 	cfg := bot.LoadConfig()
-
-	// Проверка токена
-	if cfg.TelegramToken == "" {
-		log.Fatal("❌ TELEGRAM_BOT_TOKEN не установлен в переменных окружения")
+	if err := cfg.Validate(); err != nil {
+		log.Fatalf("❌ Ошибка конфигурации: %v", err)
 	}
 
 	// Создание API клиента
@@ -40,6 +38,14 @@ func main() {
 		os.Exit(0)
 	}()
 
+	logStartupInfo()
+
+	// Запуск бота
+	telegramBot.Start()
+}
+
+// logStartupInfo выводит информацию о запуске.
+func logStartupInfo() {
 	log.Printf("🤖 Бот %s готов к работе!", bot.BuildInfo())
 	log.Println("📖 Команды:")
 	log.Println("   /start  - Начать работу")
@@ -48,8 +54,4 @@ func main() {
 	log.Println("   /list   - Мои правила")
 	log.Println("   /best   - Лучший кэшбэк")
 	log.Println()
-
-	// Запуск бота
-	telegramBot.Start()
 }
-

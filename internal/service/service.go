@@ -1,7 +1,9 @@
+// Package service содержит бизнес-логику приложения.
 package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/rymax1e/open-cashback-advisor/internal/database"
@@ -9,19 +11,40 @@ import (
 	"github.com/rymax1e/open-cashback-advisor/internal/validator"
 )
 
-// Service представляет бизнес-логику приложения
+// Константы для fuzzy поиска.
+const (
+	fuzzyThresholdGroup    = 0.6
+	fuzzyThresholdCategory = 0.6
+	fuzzyThresholdBank     = 0.65
+	fuzzyThresholdUser     = 0.7
+	fuzzyLimit             = 5
+)
+
+// Лимиты для пагинации.
+const (
+	defaultLimit = 20
+	maxLimit     = 1000
+)
+
+// Ошибки сервиса.
+var (
+	ErrGroupNotExists = errors.New("группа не существует")
+)
+
+// Service представляет бизнес-логику приложения.
 type Service struct {
-	repo *database.Repository
+	repo database.RepositoryInterface
 }
 
-// NewService создает новый сервис
-func NewService(repo *database.Repository) *Service {
+// NewService создаёт новый сервис.
+func NewService(repo database.RepositoryInterface) *Service {
 	return &Service{repo: repo}
 }
 
-// Suggest анализирует данные и возвращает предложения
+// --- Методы для работы с кэшбэком ---
+
+// Suggest анализирует данные и возвращает предложения.
 func (s *Service) Suggest(ctx context.Context, req *models.SuggestRequest) (*models.SuggestResponse, error) {
-	// Валидация всех полей
 	validationErrors := validator.ValidateSuggestRequest(
 		req.GroupName, req.Category, req.BankName, req.UserDisplayName,
 		req.MonthYear, req.CashbackPercent, req.MaxAmount,
@@ -38,37 +61,43 @@ func (s *Service) Suggest(ctx context.Context, req *models.SuggestRequest) (*mod
 		return response, nil
 	}
 
-	// Fuzzy-поиск по всем текстовым полям
-	groupSuggestions, err := s.repo.FuzzySearchGroupName(ctx, req.GroupName, 0.6, 5)
-	if err != nil {
-		return nil, fmt.Errorf("ошибка fuzzy-поиска group_name: %w", err)
+	// Выполняем fuzzy поиск
+	if err := s.fillSuggestions(ctx, req, response); err != nil {
+		return nil, err
 	}
-	response.Suggestions.GroupName = groupSuggestions
-
-	categorySuggestions, err := s.repo.FuzzySearchCategory(ctx, req.Category, 0.6, 5)
-	if err != nil {
-		return nil, fmt.Errorf("ошибка fuzzy-поиска category: %w", err)
-	}
-	response.Suggestions.Category = categorySuggestions
-
-	bankSuggestions, err := s.repo.FuzzySearchBankName(ctx, req.BankName, 0.65, 5)
-	if err != nil {
-		return nil, fmt.Errorf("ошибка fuzzy-поиска bank_name: %w", err)
-	}
-	response.Suggestions.BankName = bankSuggestions
-
-	userSuggestions, err := s.repo.FuzzySearchUserDisplayName(ctx, req.UserDisplayName, 0.7, 5)
-	if err != nil {
-		return nil, fmt.Errorf("ошибка fuzzy-поиска user_display_name: %w", err)
-	}
-	response.Suggestions.UserDisplayName = userSuggestions
 
 	return response, nil
 }
 
-// CreateCashback создает новое правило кэшбэка
+// fillSuggestions заполняет предложения из fuzzy поиска.
+func (s *Service) fillSuggestions(ctx context.Context, req *models.SuggestRequest, resp *models.SuggestResponse) error {
+	var err error
+
+	resp.Suggestions.GroupName, err = s.repo.FuzzySearchGroupName(ctx, req.GroupName, fuzzyThresholdGroup, fuzzyLimit)
+	if err != nil {
+		return fmt.Errorf("fuzzy-поиск group_name: %w", err)
+	}
+
+	resp.Suggestions.Category, err = s.repo.FuzzySearchCategory(ctx, req.Category, fuzzyThresholdCategory, fuzzyLimit)
+	if err != nil {
+		return fmt.Errorf("fuzzy-поиск category: %w", err)
+	}
+
+	resp.Suggestions.BankName, err = s.repo.FuzzySearchBankName(ctx, req.BankName, fuzzyThresholdBank, fuzzyLimit)
+	if err != nil {
+		return fmt.Errorf("fuzzy-поиск bank_name: %w", err)
+	}
+
+	resp.Suggestions.UserDisplayName, err = s.repo.FuzzySearchUserDisplayName(ctx, req.UserDisplayName, fuzzyThresholdUser, fuzzyLimit)
+	if err != nil {
+		return fmt.Errorf("fuzzy-поиск user_display_name: %w", err)
+	}
+
+	return nil
+}
+
+// CreateCashback создаёт новое правило кэшбэка.
 func (s *Service) CreateCashback(ctx context.Context, req *models.CreateCashbackRequest) (*models.CashbackRule, error) {
-	// Валидация
 	validationErrors := validator.ValidateCreateRequest(
 		req.GroupName, req.Category, req.BankName, req.UserID,
 		req.UserDisplayName, req.MonthYear, req.CashbackPercent, req.MaxAmount,
@@ -78,12 +107,8 @@ func (s *Service) CreateCashback(ctx context.Context, req *models.CreateCashback
 		return nil, fmt.Errorf("ошибки валидации: %s", validationErrors.Error())
 	}
 
-	// Парсинг и округление
 	monthYear, _ := validator.ValidateMonthYear(req.MonthYear)
-	cashbackPercent := validator.RoundToTwoDecimals(req.CashbackPercent)
-	maxAmount := validator.RoundToTwoDecimals(req.MaxAmount)
 
-	// Создание правила
 	rule := &models.CashbackRule{
 		GroupName:       req.GroupName,
 		Category:        req.Category,
@@ -91,43 +116,53 @@ func (s *Service) CreateCashback(ctx context.Context, req *models.CreateCashback
 		UserID:          req.UserID,
 		UserDisplayName: req.UserDisplayName,
 		MonthYear:       monthYear,
-		CashbackPercent: cashbackPercent,
-		MaxAmount:       maxAmount,
+		CashbackPercent: validator.RoundToTwoDecimals(req.CashbackPercent),
+		MaxAmount:       validator.RoundToTwoDecimals(req.MaxAmount),
 	}
 
 	if err := s.repo.Create(ctx, rule); err != nil {
-		return nil, fmt.Errorf("не удалось создать правило: %w", err)
+		return nil, fmt.Errorf("создание правила: %w", err)
 	}
 
 	return rule, nil
 }
 
-// GetCashback получает правило по ID
+// GetCashback получает правило по ID.
 func (s *Service) GetCashback(ctx context.Context, id int64) (*models.CashbackRule, error) {
 	return s.repo.GetByID(ctx, id)
 }
 
-// UpdateCashback обновляет правило кэшбэка
+// UpdateCashback обновляет правило кэшбэка.
 func (s *Service) UpdateCashback(ctx context.Context, id int64, req *models.UpdateCashbackRequest) error {
+	updates, err := s.buildUpdates(req)
+	if err != nil {
+		return err
+	}
+
+	return s.repo.Update(ctx, id, updates)
+}
+
+// buildUpdates строит карту обновлений из запроса.
+func (s *Service) buildUpdates(req *models.UpdateCashbackRequest) (map[string]interface{}, error) {
 	updates := make(map[string]interface{})
 
 	if req.GroupName != "" {
 		if err := validator.ValidateTextField("group_name", req.GroupName, true); err != nil {
-			return err
+			return nil, err
 		}
 		updates["group_name"] = req.GroupName
 	}
 
 	if req.Category != "" {
 		if err := validator.ValidateTextField("category", req.Category, true); err != nil {
-			return err
+			return nil, err
 		}
 		updates["category"] = req.Category
 	}
 
 	if req.BankName != "" {
 		if err := validator.ValidateTextField("bank_name", req.BankName, true); err != nil {
-			return err
+			return nil, err
 		}
 		updates["bank_name"] = req.BankName
 	}
@@ -135,47 +170,38 @@ func (s *Service) UpdateCashback(ctx context.Context, id int64, req *models.Upda
 	if req.MonthYear != "" {
 		monthYear, err := validator.ValidateMonthYear(req.MonthYear)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		updates["month_year"] = monthYear
 	}
 
 	if req.CashbackPercent > 0 {
 		if err := validator.ValidateCashbackPercent(req.CashbackPercent); err != nil {
-			return err
+			return nil, err
 		}
 		updates["cashback_percent"] = validator.RoundToTwoDecimals(req.CashbackPercent)
 	}
 
 	if req.MaxAmount > 0 {
 		if err := validator.ValidateMaxAmount(req.MaxAmount); err != nil {
-			return err
+			return nil, err
 		}
 		updates["max_amount"] = validator.RoundToTwoDecimals(req.MaxAmount)
 	}
 
-	return s.repo.Update(ctx, id, updates)
+	return updates, nil
 }
 
-// DeleteCashback удаляет правило кэшбэка
+// DeleteCashback удаляет правило кэшбэка.
 func (s *Service) DeleteCashback(ctx context.Context, id int64) error {
 	return s.repo.Delete(ctx, id)
 }
 
-// ListCashback получает список правил с пагинацией
+// ListCashback получает список правил с пагинацией.
 func (s *Service) ListCashback(ctx context.Context, req *models.ListCashbackRequest) (*models.ListCashbackResponse, error) {
-	// Установка значений по умолчанию
-	if req.Limit <= 0 {
-		req.Limit = 20
-	} else if req.Limit > 1000 {
-		req.Limit = 1000
-	}
-	if req.Offset < 0 {
-		req.Offset = 0
-	}
+	limit, offset := s.normalizePagination(req.Limit, req.Offset)
 
-	// Используем GroupName вместо UserID
-	rules, total, err := s.repo.List(ctx, req.Limit, req.Offset, req.GroupName)
+	rules, total, err := s.repo.List(ctx, limit, offset, req.GroupName)
 	if err != nil {
 		return nil, err
 	}
@@ -183,14 +209,28 @@ func (s *Service) ListCashback(ctx context.Context, req *models.ListCashbackRequ
 	return &models.ListCashbackResponse{
 		Rules:  rules,
 		Total:  total,
-		Limit:  req.Limit,
-		Offset: req.Offset,
+		Limit:  limit,
+		Offset: offset,
 	}, nil
 }
 
-// GetBestCashback получает правило с лучшим кэшбэком
+// normalizePagination нормализует параметры пагинации.
+func (s *Service) normalizePagination(limit, offset int) (int, int) {
+	if limit <= 0 {
+		limit = defaultLimit
+	} else if limit > maxLimit {
+		limit = maxLimit
+	}
+
+	if offset < 0 {
+		offset = 0
+	}
+
+	return limit, offset
+}
+
+// GetBestCashback получает правило с лучшим кэшбэком.
 func (s *Service) GetBestCashback(ctx context.Context, req *models.BestCashbackRequest) (*models.CashbackRule, error) {
-	// Валидация
 	if err := validator.ValidateTextField("group_name", req.GroupName, true); err != nil {
 		return nil, err
 	}
@@ -208,42 +248,40 @@ func (s *Service) GetBestCashback(ctx context.Context, req *models.BestCashbackR
 
 // --- Методы для работы с группами ---
 
-// CreateGroup создаёт новую группу
+// CreateGroup создаёт новую группу.
 func (s *Service) CreateGroup(ctx context.Context, groupName, creatorID string) error {
 	return s.repo.CreateGroup(ctx, groupName, creatorID)
 }
 
-// GetUserGroup получает группу пользователя
+// GetUserGroup получает группу пользователя.
 func (s *Service) GetUserGroup(ctx context.Context, userID string) (string, error) {
 	return s.repo.GetUserGroup(ctx, userID)
 }
 
-// SetUserGroup устанавливает группу пользователя
+// SetUserGroup устанавливает группу пользователя.
 func (s *Service) SetUserGroup(ctx context.Context, userID, groupName string) error {
-	// Проверяем существование группы
 	exists, err := s.repo.GroupExists(ctx, groupName)
 	if err != nil {
 		return err
 	}
 	if !exists {
-		return fmt.Errorf("группа \"%s\" не существует", groupName)
+		return fmt.Errorf("группа \"%s\": %w", groupName, ErrGroupNotExists)
 	}
 
 	return s.repo.SetUserGroup(ctx, userID, groupName)
 }
 
-// GroupExists проверяет существование группы
+// GroupExists проверяет существование группы.
 func (s *Service) GroupExists(ctx context.Context, groupName string) (bool, error) {
 	return s.repo.GroupExists(ctx, groupName)
 }
 
-// GetAllGroups возвращает список всех групп
+// GetAllGroups возвращает список всех групп.
 func (s *Service) GetAllGroups(ctx context.Context) ([]string, error) {
 	return s.repo.GetAllGroups(ctx)
 }
 
-// GetGroupMembers возвращает участников группы
+// GetGroupMembers возвращает участников группы.
 func (s *Service) GetGroupMembers(ctx context.Context, groupName string) ([]string, error) {
 	return s.repo.GetGroupMembers(ctx, groupName)
 }
-
