@@ -395,15 +395,6 @@ func formatUserListTable(users []models.UserInfo, total int) string {
 
 // formatUpdatePrompt форматирует запрос на обновление с текущей строкой для копирования.
 func formatUpdatePrompt(rule *models.CashbackRule) string {
-	// Формируем строку в формате ввода для удобного копирования
-	currentLine := fmt.Sprintf("%s, %s, %.1f, %.0f, %s",
-		rule.BankName,
-		rule.Category,
-		rule.CashbackPercent,
-		rule.MaxAmount,
-		rule.MonthYear.Format("02.01.2006"),
-	)
-	
 	return fmt.Sprintf(
 		"📝 Обновление кешбека ID: %d\n\n"+
 			"Текущие данные:\n"+
@@ -412,17 +403,13 @@ func formatUpdatePrompt(rule *models.CashbackRule) string {
 			"📅 Действует до: %s\n"+
 			"💰 Кэшбэк: %.1f%%\n"+
 			"💵 Макс. сумма: %.0f₽\n\n"+
-			"📋 Текущая строка для копирования:\n"+
-			"<code>%s</code>\n\n"+
-			"✏️ Скопируйте, измените и отправьте новые данные через запятую:\n"+
-			"Банк, Категория, Процент, Сумма[, Дата окончания]",
+			"✏️ Скопируйте строку ниже, измените и отправьте новые данные:",
 		rule.ID,
 		rule.BankName,
 		rule.Category,
 		rule.MonthYear.Format("02.01.2006"),
 		rule.CashbackPercent,
 		rule.MaxAmount,
-		currentLine,
 	)
 }
 

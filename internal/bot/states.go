@@ -318,7 +318,19 @@ func (b *Bot) handleUpdateIDInput(message *tgbotapi.Message) {
 	}
 	
 	// Переходим к ожиданию данных для обновления
+	// Отправляем первое сообщение с инструкцией
 	b.sendText(message.Chat.ID, formatUpdatePrompt(rule))
+	
+	// Отправляем второе сообщение только со строкой для копирования
+	copyLine := fmt.Sprintf("%s, %s, %.1f, %.0f, %s",
+		rule.BankName,
+		rule.Category,
+		rule.CashbackPercent,
+		rule.MaxAmount,
+		rule.MonthYear.Format("02.01.2006"),
+	)
+	b.sendTextPlain(message.Chat.ID, copyLine)
+	
 	b.setState(userID, StateAwaitingUpdateData, nil, nil, id)
 }
 
@@ -443,13 +455,7 @@ func (b *Bot) handleCreateGroupNameInput(message *tgbotapi.Message) {
 	
 	userIDStr := strconv.FormatInt(userID, 10)
 	
-	// Проверяем, не состоит ли пользователь уже в группе
-	if currentGroup, err := b.client.GetUserGroup(userIDStr); err == nil {
-		b.sendText(message.Chat.ID, fmt.Sprintf("⚠️ Вы уже состоите в группе \"%s\"", currentGroup))
-		return
-	}
-	
-	// Создаём группу
+	// Создаём группу (метод CreateGroup автоматически добавляет создателя в группу)
 	err := b.client.CreateGroup(groupName, userIDStr)
 	if err != nil {
 		b.sendText(message.Chat.ID, fmt.Sprintf("❌ %s", err))
@@ -457,7 +463,8 @@ func (b *Bot) handleCreateGroupNameInput(message *tgbotapi.Message) {
 	}
 	
 	b.sendText(message.Chat.ID, fmt.Sprintf(
-		"✅ Группа \"%s\" успешно создана!\n\nВы можете пригласить друзей командой:\n/joingroup %s",
+		"✅ Группа \"%s\" успешно создана и вы к ней присоединились!\n\n"+
+			"Вы можете пригласить друзей командой:\n/joingroup %s",
 		groupName, groupName,
 	))
 }

@@ -418,7 +418,19 @@ func (b *Bot) handleUpdateCommand(message *tgbotapi.Message) {
 		return
 	}
 
+	// Отправляем первое сообщение с инструкцией
 	b.sendText(message.Chat.ID, formatUpdatePrompt(rule))
+	
+	// Отправляем второе сообщение только со строкой для копирования
+	copyLine := fmt.Sprintf("%s, %s, %.1f, %.0f, %s",
+		rule.BankName,
+		rule.Category,
+		rule.CashbackPercent,
+		rule.MaxAmount,
+		rule.MonthYear.Format("02.01.2006"),
+	)
+	b.sendTextPlain(message.Chat.ID, copyLine)
+	
 	b.setState(message.From.ID, StateAwaitingUpdateData, nil, nil, id)
 }
 

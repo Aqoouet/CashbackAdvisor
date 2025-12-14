@@ -311,6 +311,13 @@ func (b *Bot) trySuggestSimilarCategory(message *tgbotapi.Message, category, gro
 	log.Printf("🔍 Сравнение: '%s' → '%s' (расстояние: %d, похожесть: %.1f%%)",
 		category, similar, distance, simPercent)
 
+	// Если это точное совпадение (100%), не предлагаем исправление, а выполняем поиск
+	if simPercent == 100.0 && strings.EqualFold(category, similar) {
+		log.Printf("✅ Найдено точное совпадение, выполняю поиск без исправления")
+		b.handleBestQueryWithCorrection(message, similar, true)
+		return
+	}
+
 	if simPercent > 60.0 {
 		b.suggestCategoryCorrection(message, category, similar, simPercent, distance)
 		return
@@ -321,7 +328,16 @@ func (b *Bot) trySuggestSimilarCategory(message *tgbotapi.Message, category, gro
 		return
 	}
 
-	log.Printf("❌ Похожесть слишком низкая (%.1f%%), не предлагаю исправление", simPercent)
+	// Ничего похожего не нашли - пробуем "Все покупки" как fallback
+	log.Printf("❌ Похожесть слишком низкая (%.1f%%), пробую 'Все покупки'", simPercent)
+	allPurchasesRules, errAll := b.getAllCashbacksByCategory(groupName, "Все покупки", monthYear)
+	if errAll == nil && len(allPurchasesRules) > 0 {
+		b.sendText(message.Chat.ID, formatAllCashbackResults(allPurchasesRules, category, true))
+		return
+	}
+	
+	// Даже "Все покупки" не найдены - показываем "не найдено"
+	log.Printf("❌ 'Все покупки' тоже не найдены")
 	b.sendText(message.Chat.ID, formatNotFoundMessage(category, monthYear))
 }
 
