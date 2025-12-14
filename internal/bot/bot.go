@@ -252,20 +252,27 @@ func (b *Bot) handleNavigationButtons(message *tgbotapi.Message) bool {
 		currentPage = state.KeyboardPage
 	}
 	
+	// Вычисляем общее количество страниц
+	totalPages := getTotalCommandPages()
+	
 	// Обрабатываем навигацию
 	switch message.Text {
 	case BtnNavPrev:
 		if currentPage > 0 {
 			currentPage--
+			b.setKeyboardPage(userID, currentPage)
+			// Обновляем клавиатуру
+			b.sendTextWithPage(message.Chat.ID, "📋", currentPage)
 		}
-		b.setKeyboardPage(userID, currentPage)
-		b.sendTextWithPage(message.Chat.ID, "◀️ Предыдущая страница", currentPage)
 		return true
 		
 	case BtnNavNext:
-		currentPage++
-		b.setKeyboardPage(userID, currentPage)
-		b.sendTextWithPage(message.Chat.ID, "▶️ Следующая страница", currentPage)
+		if currentPage < totalPages-1 {
+			currentPage++
+			b.setKeyboardPage(userID, currentPage)
+			// Обновляем клавиатуру
+			b.sendTextWithPage(message.Chat.ID, "📋", currentPage)
+		}
 		return true
 	}
 	

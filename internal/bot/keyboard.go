@@ -44,12 +44,18 @@ var allCommands = []string{
 	"/categorylist", "/banklist", "/userinfo", "/groupinfo",
 }
 
+// getTotalCommandPages возвращает общее количество страниц команд.
+func getTotalCommandPages() int {
+	const commandsPerPage = 4
+	return (len(allCommands) + commandsPerPage - 1) / commandsPerPage
+}
+
 // getCommandPage возвращает страницу команд с навигацией.
 func getCommandPage(page int) [][]string {
 	const commandsPerPage = 4
 	const commandsPerRow = 2
 	
-	totalPages := (len(allCommands) + commandsPerPage - 1) / commandsPerPage
+	totalPages := getTotalCommandPages()
 	
 	// Нормализуем номер страницы
 	if page < 0 {

@@ -375,6 +375,7 @@ func logSuggestions(suggestion *models.SuggestResponse, data *ParsedData) {
 }
 
 // getAllCashbacksByCategory получает все кэшбэки по категории через список всех кэшбэков группы.
+// Ищет все категории, которые содержат введенное слово (без учета регистра).
 func (b *Bot) getAllCashbacksByCategory(groupName, category, monthYear string) ([]models.CashbackRule, error) {
 	// Получаем все кэшбэки группы
 	list, err := b.client.ListCashback(groupName, 1000, 0)
@@ -382,12 +383,22 @@ func (b *Bot) getAllCashbacksByCategory(groupName, category, monthYear string) (
 		return nil, err
 	}
 	
-	// Фильтруем по категории и дате
+	// Нормализуем введенную категорию для поиска
+	categoryLower := strings.ToLower(strings.TrimSpace(category))
+	
+	// Фильтруем по категории (поиск по подстроке) и дате
 	var filtered []models.CashbackRule
 	now := time.Now()
 	
 	for _, rule := range list.Rules {
-		if rule.Category == category && rule.MonthYear.After(now.AddDate(0, 0, -1)) {
+		// Проверяем, что категория содержит введенное слово (без учета регистра)
+		ruleCategoryLower := strings.ToLower(rule.Category)
+		containsCategory := strings.Contains(ruleCategoryLower, categoryLower)
+		
+		// Также проверяем точное совпадение (приоритет)
+		exactMatch := strings.EqualFold(rule.Category, category)
+		
+		if (exactMatch || containsCategory) && rule.MonthYear.After(now.AddDate(0, 0, -1)) {
 			filtered = append(filtered, rule)
 		}
 	}
@@ -396,18 +407,39 @@ func (b *Bot) getAllCashbacksByCategory(groupName, category, monthYear string) (
 		return nil, fmt.Errorf("кэшбэк не найден")
 	}
 	
-	// Сортируем по убыванию процента
-	sortCashbackByPercent(filtered)
+	// Сортируем: сначала точные совпадения, потом по убыванию процента
+	sortCashbackByCategoryAndPercent(filtered, category)
 	
 	return filtered, nil
 }
 
-// sortCashbackByPercent сортирует кэшбэки по убыванию процента.
-func sortCashbackByPercent(rules []models.CashbackRule) {
+// sortCashbackByCategoryAndPercent сортирует кэшбэки: сначала точные совпадения категории, потом по убыванию процента.
+func sortCashbackByCategoryAndPercent(rules []models.CashbackRule, searchCategory string) {
+	searchCategoryLower := strings.ToLower(strings.TrimSpace(searchCategory))
+	
 	for i := 0; i < len(rules)-1; i++ {
 		for j := i + 1; j < len(rules); j++ {
-			if rules[j].CashbackPercent > rules[i].CashbackPercent ||
-				(rules[j].CashbackPercent == rules[i].CashbackPercent && rules[j].MaxAmount > rules[i].MaxAmount) {
+			// Приоритет точным совпадениям
+			iExact := strings.EqualFold(rules[i].Category, searchCategory)
+			jExact := strings.EqualFold(rules[j].Category, searchCategory)
+			
+			shouldSwap := false
+			
+			if iExact && !jExact {
+				// i - точное совпадение, j - нет, не меняем
+				shouldSwap = false
+			} else if !iExact && jExact {
+				// j - точное совпадение, i - нет, меняем
+				shouldSwap = true
+			} else {
+				// Оба одинаковые по типу совпадения, сортируем по проценту
+				if rules[j].CashbackPercent > rules[i].CashbackPercent ||
+					(rules[j].CashbackPercent == rules[i].CashbackPercent && rules[j].MaxAmount > rules[i].MaxAmount) {
+					shouldSwap = true
+				}
+			}
+			
+			if shouldSwap {
 				rules[i], rules[j] = rules[j], rules[i]
 			}
 		}
