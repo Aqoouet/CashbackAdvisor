@@ -83,11 +83,13 @@ func getCommandPage(page int) [][]string {
 		if page > 0 {
 			navRow = append(navRow, BtnNavPrev)
 		}
-		navRow = append(navRow, "•••") // Индикатор страницы
+		// Не добавляем индикатор, чтобы избежать распознавания как команды
 		if page < totalPages-1 {
 			navRow = append(navRow, BtnNavNext)
 		}
-		rows = append(rows, navRow)
+		if len(navRow) > 0 {
+			rows = append(rows, navRow)
+		}
 	}
 	
 	return rows

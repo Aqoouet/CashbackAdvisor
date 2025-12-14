@@ -232,10 +232,10 @@ func formatCashbackListTable(rules []models.CashbackRule, total int, showAll boo
 		header = fmt.Sprintf("📋 Выбранные кешбеки (всего %d):\n\n", total)
 	}
 
-	text := header + "<pre>"
+	text := header + "<code>"
 	
 	// Заголовок таблицы
-	text += "№  | Банк              | Категория         | %    | Сумма   | До         | Карта         | ID\n"
+	text += "N  | Банк              | Категория         | %    | Сумма   | До         | Карта         | ID\n"
 	text += "---+-------------------+-------------------+------+---------+------------+---------------+----\n"
 	
 	for i, rule := range rules {
@@ -257,7 +257,7 @@ func formatCashbackListTable(rules []models.CashbackRule, total int, showAll boo
 		)
 	}
 	
-	text += "</pre>\n\n"
+	text += "</code>\n\n"
 	
 	if !showAll && indices == nil && total > 5 {
 		text += "💡 Используйте:\n"
@@ -361,8 +361,8 @@ func formatUserListTable(users []models.UserInfo, total int) string {
 	text := fmt.Sprintf("👥 Пользователи группы \"%s\" (показано %d из %d):\n\n", 
 		users[0].GroupName, len(users), total)
 	
-	text += "<pre>"
-	text += "№  | Имя                    | ID              \n"
+	text += "<code>"
+	text += "N  | Имя                    | ID              \n"
 	text += "---+------------------------+-----------------\n"
 	
 	for i, user := range users {
@@ -377,7 +377,7 @@ func formatUserListTable(users []models.UserInfo, total int) string {
 		)
 	}
 	
-	text += "</pre>\n\n"
+	text += "</code>\n\n"
 	
 	if len(users) < total {
 		text += "💡 Используйте:\n"
