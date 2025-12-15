@@ -91,7 +91,7 @@ docker-compose -f docker-compose.full.yml up -d
 - ✅ Поддержка групп пользователей
 - ✅ Автоматическая валидация и исправление опечаток
 - ✅ Поиск лучших кэшбэков по категориям
-- ✅ Управление правилами (создание, обновление, удаление)
+- ✅ Управление кэшбэками (создание, обновление, удаление)
 
 ### REST API
 - ✅ Полнофункциональный REST API
@@ -165,7 +165,7 @@ curl http://localhost:8080/health
 # Health check
 curl http://localhost:8080/health
 
-# Создание правила
+# Создание кэшбэка
 curl -X POST http://localhost:8080/api/v1/cashback \
   -H "Content-Type: application/json" \
   -d '{

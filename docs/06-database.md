@@ -2,7 +2,7 @@
 
 ## Обзор
 
-Система использует **PostgreSQL 15** в качестве основной базы данных. База данных хранит информацию о правилах кэшбэков, группах пользователей и связях между пользователями и группами.
+Система использует **PostgreSQL 15** в качестве основной базы данных. База данных хранит информацию о кэшбэках, группах пользователей и связях между пользователями и группами.
 
 ## Расширения PostgreSQL
 
@@ -27,7 +27,7 @@ CREATE EXTENSION IF NOT EXISTS pg_trgm;
 
 ### Таблица `cashback_rules`
 
-Основная таблица для хранения правил кэшбэков.
+Основная таблица для хранения кэшбэков.
 
 **Структура**:
 
@@ -39,7 +39,7 @@ CREATE EXTENSION IF NOT EXISTS pg_trgm;
 | `bank_name` | TEXT | Название банка |
 | `user_id` | TEXT | ID пользователя Telegram |
 | `user_display_name` | TEXT | Отображаемое имя пользователя |
-| `month_year` | DATE | Месяц и год действия правила |
+| `month_year` | DATE | Месяц и год действия кэшбэка |
 | `cashback_percent` | NUMERIC(5,2) | Процент кэшбэка (0-100) |
 | `max_amount` | NUMERIC(10,2) | Максимальная сумма кэшбэка |
 | `created_at` | TIMESTAMPTZ | Дата создания записи |
@@ -248,7 +248,7 @@ psql -h localhost -U cashback_user -d cashback_db -f migrations/003_user_groups.
 
 ## Основные SQL запросы
 
-### Создание правила кэшбэка
+### Создание кэшбэка
 
 ```sql
 INSERT INTO cashback_rules (
@@ -258,7 +258,7 @@ INSERT INTO cashback_rules (
 RETURNING id, created_at, updated_at;
 ```
 
-### Получение правила по ID
+### Получение кэшбэка по ID
 
 ```sql
 SELECT id, group_name, category, bank_name, user_id, user_display_name,
@@ -267,7 +267,7 @@ FROM cashback_rules
 WHERE id = $1;
 ```
 
-### Список правил группы с пагинацией
+### Список кэшбэков группы с пагинацией
 
 ```sql
 SELECT cr.id, cr.group_name, cr.category, cr.bank_name, cr.user_id, 
