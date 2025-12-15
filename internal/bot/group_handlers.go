@@ -57,7 +57,14 @@ func (b *Bot) handleJoinGroup(message *tgbotapi.Message) {
 	if len(args) < 2 {
 		// Устанавливаем состояние ожидания названия группы
 		b.setState(message.From.ID, StateAwaitingJoinGroupName, nil, nil, 0)
-		b.showAvailableGroups(message.Chat.ID)
+		b.sendText(message.Chat.ID, "👥 Присоединение к группе\n\n"+
+			"💬 Введите название группы (без команды)\n\n"+
+			"Примеры:\n"+
+			"• Семья\n"+
+			"• Работа\n"+
+			"• Друзья\n\n"+
+			"⚠️ Группа должна существовать\n"+
+			"Или /cancel для отмены.")
 		return
 	}
 
@@ -92,29 +99,6 @@ func (b *Bot) handleJoinGroup(message *tgbotapi.Message) {
 	b.sendText(message.Chat.ID, fmt.Sprintf("✅ Вы присоединились к группе \"%s\"!", groupName))
 }
 
-// showAvailableGroups показывает список доступных групп.
-func (b *Bot) showAvailableGroups(chatID int64) {
-	groups, err := b.client.GetAllGroups()
-	if err != nil {
-		b.sendText(chatID, "❌ Ошибка получения списка групп")
-		return
-	}
-
-	if len(groups) == 0 {
-		b.sendText(chatID, "📝 Пока нет групп.\n\n💡 Создайте первую группу: /creategroup Название\n\nИли /cancel для отмены.")
-		return
-	}
-
-	text := "👥 К какой группе присоединиться?\n\n"
-	text += "📋 Доступные группы:\n"
-	for _, group := range groups {
-		text += fmt.Sprintf("• %s\n", group)
-	}
-	text += "\n💬 Введите название группы (без команды)\n"
-	text += "Или /cancel для отмены."
-
-	b.sendText(chatID, text)
-}
 
 // handleGroupInfo обрабатывает команду /groupinfo.
 func (b *Bot) handleGroupInfo(message *tgbotapi.Message) {
