@@ -112,12 +112,13 @@ func (b *Bot) handleMessage(message *tgbotapi.Message) {
 		return
 	}
 
-	// Определяем тип сообщения по наличию запятой
-	if strings.Contains(message.Text, ",") {
-		b.handleNewCashback(message, userID)
-	} else {
-		b.handleBestQueryByCategory(message)
-	}
+	// Если сообщение не команда и нет активного состояния - подсказываем использовать команды
+	b.sendText(message.Chat.ID, "ℹ️ Используйте команды для работы с ботом.\n\n"+
+		"Например:\n"+
+		"/add - Добавить кэшбэк\n"+
+		"/best - Найти лучший кэшбэк\n"+
+		"/list - Список кэшбэков\n\n"+
+		"Полный список команд: /help")
 }
 
 // routeCommand маршрутизирует команды к соответствующим обработчикам.
