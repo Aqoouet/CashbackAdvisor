@@ -201,7 +201,8 @@ func formatAllCashbackResults(rules []models.CashbackRule, requestedCategory str
 				"   📁 %s\n"+
 				"   💰 %.1f%% до %.0f₽\n"+
 				"   📅 До %s\n"+
-				"   👤 %s\n\n",
+				"   👤 %s\n"+
+				"   🆔 ID: %d\n\n",
 			medal,
 			rule.BankName,
 			rule.Category,
@@ -209,6 +210,7 @@ func formatAllCashbackResults(rules []models.CashbackRule, requestedCategory str
 			rule.MaxAmount,
 			rule.MonthYear.Format("02.01.2006"),
 			rule.UserDisplayName,
+			rule.ID,
 		)
 	}
 	
@@ -302,13 +304,15 @@ func formatBankInfo(bankName string, rules []models.CashbackRule) string {
 			"%d. 📁 %s\n"+
 				"   💰 %.1f%% до %.0f₽\n"+
 				"   📅 До %s\n"+
-				"   👤 %s\n\n",
+				"   👤 %s\n"+
+				"   🆔 ID: %d\n\n",
 			i+1,
 			rule.Category,
 			rule.CashbackPercent,
 			rule.MaxAmount,
 			rule.MonthYear.Format("02.01.2006"),
 			rule.UserDisplayName,
+			rule.ID,
 		)
 	}
 
