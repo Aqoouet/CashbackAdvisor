@@ -460,28 +460,18 @@ func (b *Bot) getAllCashbacksByCategory(groupName, category, monthYear string) (
 	return filtered, nil
 }
 
-// sortCashbackByCategoryAndPercent сортирует кэшбэки: сначала точные совпадения категории, потом по убыванию процента.
+// sortCashbackByCategoryAndPercent сортирует кэшбэки по убыванию процента кэшбэка.
 func sortCashbackByCategoryAndPercent(rules []models.CashbackRule, searchCategory string) {
 	for i := 0; i < len(rules)-1; i++ {
 		for j := i + 1; j < len(rules); j++ {
-			// Приоритет точным совпадениям
-			iExact := strings.EqualFold(rules[i].Category, searchCategory)
-			jExact := strings.EqualFold(rules[j].Category, searchCategory)
-			
+			// Сортируем по убыванию процента кэшбэка
+			// При равном проценте - по убыванию максимальной суммы
 			shouldSwap := false
 			
-			if iExact && !jExact {
-				// i - точное совпадение, j - нет, не меняем
-				shouldSwap = false
-			} else if !iExact && jExact {
-				// j - точное совпадение, i - нет, меняем
+			if rules[j].CashbackPercent > rules[i].CashbackPercent {
 				shouldSwap = true
-			} else {
-				// Оба одинаковые по типу совпадения, сортируем по проценту
-				if rules[j].CashbackPercent > rules[i].CashbackPercent ||
-					(rules[j].CashbackPercent == rules[i].CashbackPercent && rules[j].MaxAmount > rules[i].MaxAmount) {
-					shouldSwap = true
-				}
+			} else if rules[j].CashbackPercent == rules[i].CashbackPercent && rules[j].MaxAmount > rules[i].MaxAmount {
+				shouldSwap = true
 			}
 			
 			if shouldSwap {
