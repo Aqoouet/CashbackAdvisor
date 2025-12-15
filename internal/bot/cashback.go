@@ -285,9 +285,9 @@ func (b *Bot) handleBestQueryWithCorrection(message *tgbotapi.Message, category 
 	
 	// Не нашли точную категорию - пробуем найти похожие (если не пропускаем)
 	log.Printf("⚠️ Не найдено активных кешбеков для '%s', ищу похожие категории", category)
-	if !skipSuggestion {
-		b.trySuggestSimilarCategory(message, category, groupName, monthYear)
-	} else {
+		if !skipSuggestion {
+			b.trySuggestSimilarCategory(message, category, groupName, monthYear)
+		} else {
 		// skipSuggestion=true означает, что уже была попытка с исправлением
 		// Пробуем "Все покупки" как последний вариант
 		log.Printf("⚠️ Уже была попытка исправления, пробуем 'Все покупки'")
@@ -295,8 +295,8 @@ func (b *Bot) handleBestQueryWithCorrection(message *tgbotapi.Message, category 
 		if errAll == nil && len(allPurchasesRules) > 0 {
 			log.Printf("✅ Найдено %d кешбеков для 'Все покупки' как fallback", len(allPurchasesRules))
 			b.sendText(message.Chat.ID, formatAllCashbackResults(allPurchasesRules, category, true))
-			return
-		}
+		return
+	}
 		log.Printf("❌ 'Все покупки' тоже не найдены, показываю 'не найдено'")
 		b.sendText(message.Chat.ID, formatNotFoundMessage(category, monthYear))
 	}

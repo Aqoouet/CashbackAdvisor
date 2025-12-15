@@ -170,7 +170,7 @@ func scoreCategory(inputWords []string, category string) (float64, int) {
 			hasExactMatch = true
 		} else {
 			// Ищем лучшее совпадение среди слов категории
-			for _, cw := range catWords {
+		for _, cw := range catWords {
 				// Проверяем точное совпадение слов
 				if strings.ToLower(iw) == strings.ToLower(cw) {
 					bestSim = 100.0
@@ -189,13 +189,13 @@ func scoreCategory(inputWords []string, category string) (float64, int) {
 					}
 				} else {
 					// Обычное сравнение по Левенштейну
-					s := similarity(iw, cw)
-					d := levenshteinDistance(iw, cw)
-					if s > bestSim || (s == bestSim && d < bestDist) {
-						bestSim = s
-						bestDist = d
-					}
-				}
+			s := similarity(iw, cw)
+			d := levenshteinDistance(iw, cw)
+			if s > bestSim || (s == bestSim && d < bestDist) {
+				bestSim = s
+				bestDist = d
+			}
+		}
 			}
 		}
 		

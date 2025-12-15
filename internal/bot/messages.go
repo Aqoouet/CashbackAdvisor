@@ -137,19 +137,19 @@ func formatBestCashback(rule *models.CashbackRule, requestedCategory string, isF
 		)
 	} else {
 		text = fmt.Sprintf(
-			"🏆 Лучший кэшбэк для \"%s\":\n\n"+
-				"🏦 Банк: %s\n"+
+		"🏆 Лучший кэшбэк для \"%s\":\n\n"+
+			"🏦 Банк: %s\n"+
 				"📅 Действует до: %s\n"+
-				"💰 Кэшбэк: %.1f%%\n"+
-				"💵 Макс. сумма: %.0f₽\n"+
-				"👤 Карта: %s",
-			rule.Category,
-			rule.BankName,
+			"💰 Кэшбэк: %.1f%%\n"+
+			"💵 Макс. сумма: %.0f₽\n"+
+			"👤 Карта: %s",
+		rule.Category,
+		rule.BankName,
 			rule.MonthYear.Format("02.01.2006"),
-			rule.CashbackPercent,
-			rule.MaxAmount,
-			rule.UserDisplayName,
-		)
+		rule.CashbackPercent,
+		rule.MaxAmount,
+		rule.UserDisplayName,
+	)
 	}
 	
 	return text

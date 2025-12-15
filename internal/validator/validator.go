@@ -62,10 +62,10 @@ func ValidateMonthYear(monthYear string) (time.Time, error) {
 		return lastDay, nil
 	}
 
-	return time.Time{}, ValidationError{
-		Field:   "month_year",
+		return time.Time{}, ValidationError{
+			Field:   "month_year",
 		Message: fmt.Sprintf("неверный формат даты, ожидается дд.мм.гггг (например, 31.12.2024), получено: %s", monthYear),
-	}
+		}
 }
 
 // ValidateCashbackPercent валидирует процент кэшбэка
