@@ -315,6 +315,9 @@ func (b *Bot) handleCommandHelp(message *tgbotapi.Message, commandName string) {
 
 // handleAddCommand обрабатывает команду /add.
 func (b *Bot) handleAddCommand(message *tgbotapi.Message) {
+	// Устанавливаем состояние ожидания данных
+	b.setState(message.From.ID, StateAwaitingAddData, nil, nil, 0)
+
 	text := `📝 Отправьте данные о кэшбэке.
 
 Формат: Банк, Категория, Процент, Сумма[, Дата окончания]

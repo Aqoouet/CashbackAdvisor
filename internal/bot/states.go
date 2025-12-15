@@ -282,6 +282,22 @@ func (b *Bot) handleManualInput(message *tgbotapi.Message, state *UserState) {
 	b.clearState(message.From.ID)
 }
 
+// handleAddDataInput обрабатывает ввод данных для команды /add.
+func (b *Bot) handleAddDataInput(message *tgbotapi.Message) {
+	userID := message.From.ID
+	
+	// Проверка на отмену
+	if isCancelAnswer(message.Text) {
+		b.clearState(userID)
+		b.sendText(message.Chat.ID, "🚫 Операция отменена")
+		return
+	}
+	
+	// Очищаем состояние и обрабатываем как новый кэшбэк
+	b.clearState(userID)
+	b.handleNewCashback(message, userID)
+}
+
 // handleBestCategoryInput обрабатывает ввод категории для команды /best.
 func (b *Bot) handleBestCategoryInput(message *tgbotapi.Message) {
 	userID := message.From.ID
