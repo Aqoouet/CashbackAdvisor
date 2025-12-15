@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log"
 	"strconv"
-	"strings"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"github.com/rymax1e/open-cashback-advisor/internal/models"
@@ -85,8 +84,6 @@ func (b *Bot) Start() {
 
 // handleMessage маршрутизирует входящие сообщения.
 func (b *Bot) handleMessage(message *tgbotapi.Message) {
-	userID := message.From.ID
-
 	log.Printf("📨 Сообщение от @%s: %s", message.From.UserName, message.Text)
 
 	// Обработка кнопок навигации (до обработки команд)
