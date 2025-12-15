@@ -279,6 +279,13 @@ func (b *Bot) handleBestQueryWithCorrection(message *tgbotapi.Message, category 
 	// Если нашли точные совпадения - показываем все
 	if err == nil && len(allRules) > 0 {
 		log.Printf("✅ Найдено %d активных кешбеков для категории '%s'", len(allRules), category)
+		
+		// Логируем порядок результатов для отладки
+		for i, rule := range allRules {
+			log.Printf("  %d. %s - %s: %.1f%% до %.0f₽ (категория: %s)", 
+				i+1, rule.BankName, rule.Category, rule.CashbackPercent, rule.MaxAmount, rule.Category)
+		}
+		
 		b.sendText(message.Chat.ID, formatAllCashbackResults(allRules, category, false))
 		return
 	}
