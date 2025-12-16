@@ -54,7 +54,6 @@ func (b *Bot) handleCreateGroup(message *tgbotapi.Message) {
 func (b *Bot) handleJoinGroup(message *tgbotapi.Message) {
 	args := strings.Fields(message.Text)
 	userIDStr := strconv.FormatInt(message.From.ID, 10)
-	userID := message.From.ID
 
 	log.Printf("🔍 [JOINGROUP] Начало обработки команды /joingroup для пользователя @%s (ID: %s)", 
 		message.From.UserName, userIDStr)
