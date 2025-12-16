@@ -100,9 +100,16 @@ func (b *Bot) handleMessage(message *tgbotapi.Message) {
 		return
 	}
 
-	// Проверяем членство в группе
-	if !b.checkGroupMembership(message) {
-		return
+	// Проверяем, есть ли активное состояние, связанное с присоединением/созданием группы
+	// Если есть - пропускаем проверку членства, т.к. пользователь как раз пытается присоединиться
+	state, hasState := b.userStates[message.From.ID]
+	skipGroupCheck := hasState && (state.State == StateAwaitingJoinGroupName || state.State == StateAwaitingCreateGroupName)
+
+	// Проверяем членство в группе (только если нет состояния присоединения)
+	if !skipGroupCheck {
+		if !b.checkGroupMembership(message) {
+			return
+		}
 	}
 
 	// Обработка состояний пользователя
