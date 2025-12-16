@@ -177,10 +177,18 @@ func (b *Bot) checkGroupMembership(message *tgbotapi.Message) bool {
 // handleUserState обрабатывает сообщение в контексте текущего состояния.
 // Возвращает true, если сообщение было обработано.
 func (b *Bot) handleUserState(message *tgbotapi.Message) bool {
-	state, exists := b.userStates[message.From.ID]
+	userID := message.From.ID
+	userIDStr := strconv.FormatInt(userID, 10)
+	
+	state, exists := b.userStates[userID]
 	if !exists {
+		log.Printf("🔍 [HANDLE_STATE] Пользователь @%s (ID: %s) не имеет активного состояния", 
+			message.From.UserName, userIDStr)
 		return false
 	}
+
+	log.Printf("🔍 [HANDLE_STATE] Пользователь @%s (ID: %s) имеет состояние: %s", 
+		message.From.UserName, userIDStr, state.State)
 
 	switch state.State {
 	case StateAwaitingConfirmation:
@@ -208,13 +216,17 @@ func (b *Bot) handleUserState(message *tgbotapi.Message) bool {
 	case StateAwaitingDeleteID:
 		b.handleDeleteIDInput(message)
 	case StateAwaitingJoinGroupName:
+		log.Printf("🔍 [HANDLE_STATE] Вызываю handleJoinGroupNameInput для пользователя @%s", message.From.UserName)
 		b.handleJoinGroupNameInput(message)
 	case StateAwaitingCreateGroupName:
+		log.Printf("🔍 [HANDLE_STATE] Вызываю handleCreateGroupNameInput для пользователя @%s", message.From.UserName)
 		b.handleCreateGroupNameInput(message)
 	default:
+		log.Printf("⚠️ [HANDLE_STATE] Неизвестное состояние %s для пользователя @%s", state.State, message.From.UserName)
 		return false
 	}
 
+	log.Printf("✅ [HANDLE_STATE] Состояние обработано для пользователя @%s", message.From.UserName)
 	return true
 }
 
