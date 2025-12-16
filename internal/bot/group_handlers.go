@@ -54,9 +54,14 @@ func (b *Bot) handleCreateGroup(message *tgbotapi.Message) {
 func (b *Bot) handleJoinGroup(message *tgbotapi.Message) {
 	args := strings.Fields(message.Text)
 	userIDStr := strconv.FormatInt(message.From.ID, 10)
+	userID := message.From.ID
+
+	log.Printf("🔍 [JOINGROUP] Начало обработки команды /joingroup для пользователя @%s (ID: %s)", 
+		message.From.UserName, userIDStr)
 
 	if len(args) < 2 {
 		// Устанавливаем состояние ожидания названия группы
+		log.Printf("🔍 [JOINGROUP] Аргументы не указаны, переводим в состояние ожидания")
 		b.setState(message.From.ID, StateAwaitingJoinGroupName, nil, nil, 0)
 		b.sendText(message.Chat.ID, "👥 Присоединение к группе\n\n"+
 			"💬 Введите название группы (без команды)\n\n"+
@@ -70,9 +75,15 @@ func (b *Bot) handleJoinGroup(message *tgbotapi.Message) {
 	}
 
 	groupName := strings.Join(args[1:], " ")
+	log.Printf("🔍 [JOINGROUP] Получено название группы: \"%s\" (длина: %d)", groupName, len(groupName))
 
 	// Проверяем существование группы
-	if !b.client.GroupExists(groupName) {
+	log.Printf("🔍 [JOINGROUP] Проверяю существование группы \"%s\"...", groupName)
+	groupExists := b.client.GroupExists(groupName)
+	log.Printf("🔍 [JOINGROUP] Результат проверки существования группы \"%s\": %v", groupName, groupExists)
+	
+	if !groupExists {
+		log.Printf("❌ [JOINGROUP] Группа \"%s\" не существует для пользователя @%s", groupName, message.From.UserName)
 		b.sendText(message.Chat.ID, fmt.Sprintf(
 			"❌ Группа \"%s\" не существует.\n\nСоздайте её: /creategroup %s",
 			groupName, groupName,
@@ -81,22 +92,38 @@ func (b *Bot) handleJoinGroup(message *tgbotapi.Message) {
 	}
 
 	// Проверяем текущую группу пользователя
-	if currentGroup, err := b.client.GetUserGroup(userIDStr); err == nil {
+	log.Printf("🔍 [JOINGROUP] Проверяю текущую группу пользователя @%s (ID: %s)...", 
+		message.From.UserName, userIDStr)
+	currentGroup, err := b.client.GetUserGroup(userIDStr)
+	if err != nil {
+		log.Printf("ℹ️ [JOINGROUP] Пользователь @%s не состоит ни в какой группе (ошибка: %v)", 
+			message.From.UserName, err)
+	} else {
+		log.Printf("ℹ️ [JOINGROUP] Пользователь @%s состоит в группе: \"%s\"", 
+			message.From.UserName, currentGroup)
 		if currentGroup == groupName {
+			log.Printf("⚠️ [JOINGROUP] Пользователь @%s уже состоит в группе \"%s\"", 
+				message.From.UserName, currentGroup)
 			b.sendText(message.Chat.ID, fmt.Sprintf("⚠️ Вы уже состоите в группе \"%s\"", currentGroup))
 			return
 		}
-		log.Printf("👥 Пользователь @%s переключается из группы \"%s\" в группу \"%s\"",
+		log.Printf("👥 [JOINGROUP] Пользователь @%s переключается из группы \"%s\" в группу \"%s\"",
 			message.From.UserName, currentGroup, groupName)
 	}
 
 	// Присоединяемся к группе
-	err := b.client.JoinGroup(userIDStr, groupName)
+	log.Printf("🔍 [JOINGROUP] Пытаюсь присоединить пользователя @%s (ID: %s) к группе \"%s\"...", 
+		message.From.UserName, userIDStr, groupName)
+	err = b.client.JoinGroup(userIDStr, groupName)
 	if err != nil {
+		log.Printf("❌ [JOINGROUP] Ошибка присоединения пользователя @%s к группе \"%s\": %v", 
+			message.From.UserName, groupName, err)
 		b.sendText(message.Chat.ID, fmt.Sprintf("❌ Ошибка: %s", err))
 		return
 	}
 
+	log.Printf("✅ [JOINGROUP] Пользователь @%s успешно присоединился к группе \"%s\"", 
+		message.From.UserName, groupName)
 	b.sendText(message.Chat.ID, fmt.Sprintf("✅ Вы присоединились к группе \"%s\"!", groupName))
 }
 
