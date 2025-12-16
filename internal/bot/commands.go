@@ -410,7 +410,23 @@ func (b *Bot) handleList(message *tgbotapi.Message) {
 		return
 	}
 
-	b.sendTextPlain(message.Chat.ID, formatCashbackListTable(filtered, list.Total, showAll, indices))
+	text := formatCashbackListTable(filtered, list.Total, showAll, indices)
+
+	// Ограничение Telegram ~4096 символов. Если слишком длинно, показываем последнее 5 по умолчанию.
+	if len(text) > 3800 {
+		log.Printf("⚠️ /list ответ слишком длинный (%d символов), показываю последние 5", len(text))
+		// Берем последние 5 записей
+		limit := 5
+		if len(list.Rules) < limit {
+			limit = len(list.Rules)
+		}
+		fallback := list.Rules[:limit]
+		b.sendText(message.Chat.ID, "⚠️ Список слишком длинный, показываю последние 5 записей.\nИспользуйте /list 1-20 или кнопки навигации.")
+		b.sendTextPlain(message.Chat.ID, formatCashbackListTable(fallback, list.Total, false, nil))
+		return
+	}
+
+	b.sendTextPlain(message.Chat.ID, text)
 }
 
 // handleUpdateCommand обрабатывает команду /update ID.
